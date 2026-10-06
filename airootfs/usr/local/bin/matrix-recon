@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+GREEN='\033[0;32m'
+RESET='\033[0m'
+clear
+echo -e "${GREEN}PASSIVE MATRIX RECON${RESET}\n"
+read -rp "Enter target (domain/handle): " TARGET
+[ -z "$TARGET" ] && exit 0
+CHOICE=$(printf "1. Certificate Transparency\n2. Historical URLs\n3. WHOIS Lookup" | fzf --prompt="Select Module > ")
+case "$CHOICE" in
+  *"Certificate"*) curl -s "https://crt.sh/?q=%25.${TARGET}&output=json" | jq -r '.[].name_value' | sort -u | less ;;
+  *"Historical"*)  curl -s "http://web.archive.org/cdx/search/cdx?url=*.${TARGET}/*&output=json&fl=original" | jq -r '.[1:][]' | less ;;
+  *"WHOIS"*)       whois "$TARGET" | less ;;
+esac
