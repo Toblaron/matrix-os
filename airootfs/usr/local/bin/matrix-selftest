@@ -23,8 +23,16 @@ else
   sleep 30 # let the rain fill the screen and the layout windows open
   say "layout windows: $(pgrep -fc -- '--class matrix_')"
   say "failed units: $(systemctl --failed --no-legend | awk '{print $2}' | xargs)"
+  log=/home/neo/.local/state/matrix/wayfire.log
+  say "pixdecor: $(ls /usr/lib/wayfire/ 2>/dev/null | grep -c pixdecor) plugin(s); in use: $(grep -c pixdecor /home/neo/.config/wayfire.ini 2>/dev/null)"
+  say "profile: $(sudo -u neo matrix-hwdetect | tr '
+' ' ')"
+  say "--- hud / client errors from wayfire.log"
+  grep -aiE 'traceback|error|exception|matrix-hud|kitty|gtk|layer' "$log" | grep -v '^EE.*EGL' | tail -n 40 > "$out"
   say "READY"
-  sleep 20
+  sleep 60
+  say "READY2"
+  sleep 15
   say "PASS"
 fi
 say "DONE"

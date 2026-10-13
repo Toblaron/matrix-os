@@ -36,13 +36,17 @@ result=TIMEOUT shot=0
 for ((t = 0; t < TIMEOUT; t += 5)); do
   sleep 5
   kill -0 $QEMU 2>/dev/null || break
-  if ((!shot)) && grep -q 'MATRIX_SELFTEST: READY' /tmp/serial.log; then
-    echo "screendump /tmp/screen.ppm" | socat - UNIX-CONNECT:/tmp/qemu-mon.sock >/dev/null
-    sleep 2
-    python -c "from PIL import Image; Image.open('/tmp/screen.ppm').save('$DIST/selftest.png')" &&
-      echo "==> Screenshot saved to dist/selftest.png"
-    shot=1
-  fi
+  for n in 1 2; do # READY (desktop up) and READY2 (a minute later)
+    tag=READY; ((n == 2)) && tag=READY2
+    if ((shot < n)) && grep -q "MATRIX_SELFTEST: $tag\$" <(tr -d '\r' < /tmp/serial.log); then
+      echo "screendump /tmp/screen.ppm" | socat - UNIX-CONNECT:/tmp/qemu-mon.sock >/dev/null
+      sleep 2
+      name=selftest.png; ((n == 2)) && name=selftest-later.png
+      python -c "from PIL import Image; Image.open('/tmp/screen.ppm').save('$DIST/$name')" &&
+        echo "==> Screenshot saved to dist/$name"
+      shot=$n
+    fi
+  done
   if grep -q 'MATRIX_SELFTEST: DONE' /tmp/serial.log; then
     grep -q 'MATRIX_SELFTEST: PASS' /tmp/serial.log && result=PASS || result=FAIL
     break
