@@ -909,6 +909,18 @@ class Hud:
         self.ipc = WayfireIPC(self.on_ipc)  # after the windows: may wait on the compositor
         self.beats = 0
         GLib.timeout_add_seconds(5, self.heartbeat)
+        GLib.timeout_add_seconds(15, self.watchdog)
+
+    def watchdog(self):
+        """Re-map windows that never drew: an overloaded compositor can drop
+        the first frame of a new layer surface and the window then stays empty."""
+        stuck = [w for w in self.widgets + self.side + self.rains
+                 if w.win.get_visible() and not getattr(w, "_drawn", False)]
+        for w in stuck:
+            log(f"watchdog: re-mapping {type(w).__name__} (no frame yet)")
+            w.win.hide()
+            w.win.show_all()
+        return bool(stuck) and self.beats < 60  # keep checking while any are stuck
 
     def heartbeat(self):
         """Proves the main loop is alive and which windows have drawn (hud.log)."""

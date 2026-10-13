@@ -73,4 +73,6 @@ log "Running mkarchiso"
 mkdir -p "$OUT"
 mkarchiso -v -w /tmp/archiso-work -o "$OUT" "$SRC"
 (cd "$OUT" && sha256sum matrix-os-*.iso > matrix-os.sha256)
+# keep the locally built packages for scripts/hud-harness-in-container.sh
+mkdir -p "$OUT/pkgs" && cp "$REPO"/*.pkg.tar.zst "$OUT/pkgs/" 2>/dev/null || true
 log "BUILD_OK"

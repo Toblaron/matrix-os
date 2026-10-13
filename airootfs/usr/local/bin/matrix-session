@@ -11,8 +11,12 @@ eval "$(matrix-hwdetect)"
 # Qt apps (Wireshark, KeePassXC) follow the GTK theme
 export QT_QPA_PLATFORMTHEME=gtk3
 
-# swap in the glowing pixdecor decorations once the plugin is available
-if [ -e /usr/lib/wayfire/libpixdecor.so ] && grep -q '^plugins = .*\bdecoration\b' "$CONF/wayfire.ini"; then
+# glowing pixdecor decorations when the plugin is there - except on software
+# rendering (VMs, MATRIX_LOWFX): its shadows then saturate the CPU and Wayfire
+# stops delivering frames to the HUD
+if [ -n "$MATRIX_LOWFX" ]; then
+  sed -i '/^plugins = /s/\bpixdecor\b/decoration/' "$CONF/wayfire.ini"
+elif [ -e /usr/lib/wayfire/libpixdecor.so ] && grep -q '^plugins = .*\bdecoration\b' "$CONF/wayfire.ini"; then
   sed -i '/^plugins = /s/\bdecoration\b/pixdecor/' "$CONF/wayfire.ini"
 fi
 
