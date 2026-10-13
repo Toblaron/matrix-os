@@ -29,6 +29,26 @@ else
 ' ' ')"
   say "firewall: nftables=$(systemctl is-active nftables) marker=$([ -e /run/matrix/firewall-strict ] && echo yes || echo no) tables=$(nft list tables 2>&1 | xargs)"
   journalctl -b -u nftables --no-pager | tail -n 6 > "$out"
+  say "--- hud.log"
+  tail -n 40 /home/neo/.local/state/matrix/hud.log > "$out" 2>/dev/null
+  say "--- wayfire views (ipc)"
+  sock=$(ls /run/user/1000/wayfire-*.socket 2>/dev/null | head -1)
+  [ -n "$sock" ] && timeout 20 sudo -u neo python3 - "$sock" > "$out" 2>&1 <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX); s.settimeout(15); s.connect(sys.argv[1])
+msg = json.dumps({"method": "window-rules/list-views", "data": {}}).encode()
+s.sendall(len(msg).to_bytes(4, "little") + msg)
+def exact(n):
+    b = b""
+    while len(b) < n:
+        b += s.recv(n - len(b))
+    return b
+views = json.loads(exact(int.from_bytes(exact(4), "little")))
+for v in views if isinstance(views, list) else []:
+    g = v.get("geometry", {})
+    print(f"view {v.get('id')} {v.get('type')} layer={v.get('layer')} app={v.get('app-id')} "
+          f"mapped={v.get('mapped')} {g.get('x')},{g.get('y')} {g.get('width')}x{g.get('height')}")
+PY
   say "--- hud / client errors from wayfire.log"
   grep -aiE 'traceback|error|exception|matrix-hud|kitty|gtk|layer' "$log" | grep -v '^EE.*EGL' | tail -n 40 > "$out"
   alive() { pgrep -f 'python3? .*matrix-hud' >/dev/null && pgrep -x wayfire >/dev/null && pgrep -x waybar >/dev/null; }

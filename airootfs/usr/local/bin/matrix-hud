@@ -69,6 +69,19 @@ RABBIT = [
 ]
 
 
+LOG = Path.home() / ".local/state/matrix/hud.log"
+
+
+def log(msg):
+    """Append to ~/.local/state/matrix/hud.log (read by matrix-selftest)."""
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with LOG.open("a") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+    except OSError:
+        pass
+
+
 def say(text):
     """Operator voice (no-op unless enabled, see matrix-say)."""
     subprocess.Popen(["matrix-say", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -243,8 +256,15 @@ class WayfireIPC:
         self.cube = False
         self.changed_at = 0.0
         self.path = os.environ.get("WAYFIRE_SOCKET")
+        self.connected = False
         if not self.path:
+            log("ipc: WAYFIRE_SOCKET not set")
             return
+        # a busy compositor can take seconds to answer: never block startup on
+        # it, keep retrying in the background until it does
+        GLib.timeout_add_seconds(1, self.connect)
+
+    def connect(self):
         try:
             self.refresh()
             self.events = self._connect()
@@ -252,13 +272,19 @@ class WayfireIPC:
                 "events": ["wset-workspace-changed", "plugin-activation-state-changed",
                            "output-gain-focus"]})
             self._read(self.events)
+            self.events.settimeout(None)
             GLib.io_add_watch(self.events.fileno(), GLib.IO_IN | GLib.IO_HUP, self._on_event)
-        except OSError:
-            self.path = None
+            self.connected = True
+            log(f"ipc: connected, workspace {self.ws}")
+            self.on_change()
+            return False
+        except (OSError, ValueError) as e:
+            log(f"ipc: not ready ({e}), retrying")
+            return True
 
     def _connect(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(2)
+        s.settimeout(5)
         s.connect(self.path)
         return s
 
@@ -290,6 +316,9 @@ class WayfireIPC:
 
     def _on_event(self, _fd, cond):
         if cond & GLib.IO_HUP:
+            log("ipc: socket closed, reconnecting")
+            self.connected = False
+            GLib.timeout_add_seconds(5, self.connect)
             return False
         try:
             ev = self._read(self.events)
@@ -457,6 +486,11 @@ def layer_window(monitor, layer, anchors, size=None, margins=None, click_through
     win.set_app_paintable(True)
     if click_through:
         win.connect("realize", lambda w: w.input_shape_combine_region(cairo.Region()))
+    name = getattr(layer, "value_nick", str(layer))
+    win.connect("map", lambda w: log(f"window mapped: {name} anchors={len(anchors)}"))
+    win.connect("size-allocate", lambda w, a: log(f"window sized: {name} {a.width}x{a.height}")
+                if (a.width, a.height) != getattr(w, "_last_size", None) and
+                not setattr(w, "_last_size", (a.width, a.height)) else None)
     return win
 
 
@@ -581,6 +615,9 @@ class Rain:
         return True
 
     def on_draw(self, _w, cr):
+        if not getattr(self, "_drawn", False):
+            self._drawn = True
+            log(f"rain: first frame (surface={'yes' if self.surface else 'no'})")
         if self.surface:
             cr.set_source_surface(self.surface, 0, 0)
             cr.paint()
@@ -602,6 +639,9 @@ class Widget:
         return True
 
     def _draw(self, _w, cr):
+        if not getattr(self, "_drawn", False):
+            self._drawn = True
+            log(f"{type(self).__name__}: first frame")
         cr.set_operator(cairo.OPERATOR_SOURCE)
         cr.set_source_rgba(0, 0, 0, 0)
         cr.paint()
@@ -665,7 +705,7 @@ class TelemetryPanel(Widget):
 
     def draw(self, cr):
         s = self.stats
-        left, right = self.hud.ipc.label() if self.hud.ipc else (None, None)
+        left, right = self.hud.ipc.label() if self.hud.ipc and self.hud.ipc.connected else (None, None)
         if left:
             text(cr, left, 6, 16, 14)
             text(cr, right, 774, 16, 14, align="right")
@@ -826,8 +866,9 @@ class Hud:
         self.dejavu_until = 0.0
         self.mode = "full"
         self.rains, self.widgets, self.side = [], [], []
-        self.ipc = WayfireIPC(self.on_ipc)
+        self.ipc = None
         GLib.timeout_add(1000, self.stats.update)
+        log(f"hud start: pid {os.getpid()} mode={os.environ.get('MATRIX_HUD_MODE', 'full')} fps={self.fps}")
 
         display = Gdk.Display.get_default()
         for i in range(display.get_n_monitors()):
@@ -845,6 +886,7 @@ class Hud:
 
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self.load_mode)
         self.load_mode()
+        self.ipc = WayfireIPC(self.on_ipc)  # after the windows: may wait on the compositor
 
     def load_mode(self):
         mode = os.environ.get("MATRIX_HUD_MODE", "full")
@@ -853,6 +895,7 @@ class Hud:
         except OSError:
             pass
         self.mode = mode if mode in ("full", "monitor", "cinema", "calm") else "full"
+        log(f"mode: {self.mode}")
         for r in self.rains:
             r.set_enabled(self.mode != "calm")
         for w in self.widgets:
