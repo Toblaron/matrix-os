@@ -106,7 +106,7 @@ cat > /mnt/boot/loader/entries/matrix-os.conf <<EOF
 title   Matrix OS
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
-options root=UUID=$uuid rw quiet splash nvidia_drm.modeset=1
+options root=UUID=$uuid rw quiet splash systemd.firstboot=off nvidia_drm.modeset=1
 EOF
 
 sync
