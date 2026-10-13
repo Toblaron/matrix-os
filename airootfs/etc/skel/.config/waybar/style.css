@@ -66,3 +66,6 @@ tooltip label { color: #8dffb0; }
 #network.disconnected,
 #bluetooth.disabled,
 #pulseaudio.muted { color: rgba(61, 255, 116, 0.35); }
+
+#custom-privacy.on { color: #8dffb0; text-shadow: 0 0 6px #3dff74; }
+#custom-privacy.off { color: rgba(61, 255, 116, 0.45); }

@@ -1,0 +1,7 @@
+# AUR packages built into the local [matrix-local] repo before mkarchiso.
+# A package that fails to build is skipped (with a warning), never fatal.
+piper-tts-bin
+subfinder-bin
+httpx-bin
+dnsx-bin
+amass-bin

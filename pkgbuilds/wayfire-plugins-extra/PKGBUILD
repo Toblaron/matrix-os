@@ -1,0 +1,30 @@
+# Matrix OS: plugins-extra matching Arch's wayfire 0.11 (the AUR package is
+# stuck on 0.10). Ships pixdecor (rounded, glowing decorations) and shadows.
+pkgname=wayfire-plugins-extra
+pkgver=0.11.2
+pkgrel=1
+pkgdesc='Additional plugins for Wayfire, incl. pixdecor and wayfire-shadows'
+arch=(x86_64)
+url=https://github.com/WayfireWM/wayfire-plugins-extra
+license=(MIT)
+depends=(wayfire glibmm libevdev boost-libs librsvg cairo)
+makedepends=(git meson ninja boost nlohmann-json glm vulkan-headers wayland-protocols)
+source=("git+$url.git#tag=v$pkgver")
+sha256sums=(SKIP)
+
+build() {
+  # pixdecor/shadows are git subprojects that track their own HEAD; if they
+  # stop compiling against wayfire 0.11, still ship the core extra plugins.
+  if ! { arch-meson $pkgname build -Dpixdecor=true -Dwayfire_shadows=true &&
+         meson compile -C build; }; then
+    echo "==> pixdecor/shadows failed to build, continuing without them"
+    rm -rf build
+    arch-meson $pkgname build
+    meson compile -C build
+  fi
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+  install -Dm644 $pkgname/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
-# Opens the Matrix OS desktop layout: digital-rain window, fastfetch,
-# audio visualizer and a shell, placed like the reference design.
+# Desktop layout presets (Super+1..4):
+#   hacker   rain window, fastfetch, audio visualizer and a shell (Desktop1.jpg)
+#   focus    one large centred shell, HUD widgets only
+#   monitor  no windows: every HUD panel incl. Sentinels and the recon graph
+#   cinema   nothing but the digital rain
+#   --reset  reopen the current preset's windows
 #
-# Window positions are window-rules in ~/.config/wayfire.ini; this script
-# rescales them to the current output resolution first (Wayfire reloads the
-# ini live), so the layout fits any screen.
-#   --reset   close the layout windows and open them again
+# Window positions are window-rules in the active Wayfire config; this script
+# rescales them to the current output first (Wayfire reloads the ini live).
 set -u
-INI="$HOME/.config/wayfire.ini"
+INI=${WAYFIRE_CONFIG_FILE:-$HOME/.config/wayfire.ini}
+STATE=$HOME/.cache/matrix
+mkdir -p "$STATE"
+
+preset=${1:-$(cat "$STATE/layout" 2>/dev/null || echo hacker)}
+[ "$preset" = --reset ] && preset=$(cat "$STATE/layout" 2>/dev/null || echo hacker)
+case $preset in hacker | focus | monitor | cinema) ;; *) echo "unknown preset: $preset" >&2; exit 1 ;; esac
+echo "$preset" > "$STATE/layout"
 
 read -r W H < <(
   wlr-randr 2>/dev/null | awk '
@@ -17,34 +26,49 @@ read -r W H < <(
 )
 W=${W:-1920} H=${H:-1080}
 
-# name  x     y     w     h   (fractions of the output, taken from Desktop1.jpg)
-LAYOUT="rain  0.025 0.067 0.410 0.497
+# name  x     y     w     h   (fractions of the output)
+case $preset in
+  hacker) LAYOUT="rain  0.025 0.067 0.410 0.497
 fetch 0.325 0.294 0.405 0.432
 viz   0.748 0.296 0.233 0.200
-term  0.748 0.513 0.233 0.346"
+term  0.748 0.513 0.233 0.346" ;;
+  focus) LAYOUT="term  0.200 0.110 0.600 0.640" ;;
+  *) LAYOUT="" ;;
+esac
 
 if [ -f "$INI" ]; then
-  rules=$(echo "$LAYOUT" | awk -v W="$W" -v H="$H" '{
+  rules=$(echo "$LAYOUT" | awk -v W="$W" -v H="$H" 'NF {
     printf "rule_%s_move = on created if app_id is \"matrix_%s\" then move %d %d\n", $1, $1, $2*W, $3*H
     printf "rule_%s_size = on created if app_id is \"matrix_%s\" then resize %d %d\n", $1, $1, $4*W, $5*H }')
   awk -v rules="$rules" '
-    /^# >>> matrix-layout/ { print; print rules; skip = 1; next }
+    /^# >>> matrix-layout/ { print; if (rules != "") print rules; skip = 1; next }
     /^# <<< matrix-layout/ { skip = 0 }
     !skip' "$INI" > "$INI.tmp" && mv "$INI.tmp" "$INI"
   sleep 0.5 # let Wayfire pick up the new rules
 fi
 
-if [ "${1:-}" = "--reset" ]; then
-  pkill -f -- '--class matrix_(rain|fetch|viz|term)'
-  sleep 0.3
-fi
+# HUD mode follows the preset
+case $preset in monitor) mode=monitor ;; cinema) mode=cinema ;; *) mode=full ;; esac
+[ "${MATRIX_MODE:-red}" = blue ] && mode=calm
+echo "$mode" > "$STATE/hud-mode"
+pkill -USR1 -f matrix-hud
+
+# close windows that don't belong to this preset, open the ones that do
+pkill -f -- '--class matrix_(rain|fetch|viz|term)( |$)'
+sleep 0.3
 
 launch() { # class, command...
   local class=$1; shift
-  pgrep -f -- "--class $class" >/dev/null || setsid -f kitty --class "$class" "$@" >/dev/null 2>&1
+  setsid -f kitty --class "$class" "$@" >/dev/null 2>&1
 }
-
-launch matrix_rain  cmatrix -b -u 4 -C green
-launch matrix_fetch bash -c 'echo "❯ fastfetch"; fastfetch; exec bash'
-launch matrix_viz   cava
-launch matrix_term  bash -c 'printf "❯ sudo boot-overrides\n\nTHE MATRIX HAS YOU.\n\n"; exec bash'
+case $preset in
+  hacker)
+    launch matrix_rain cmatrix -b -u 4 -C green
+    launch matrix_fetch bash -c 'echo "❯ fastfetch"; fastfetch; exec bash'
+    launch matrix_viz cava
+    launch matrix_term bash -c 'printf "❯ sudo boot-overrides\n\nTHE MATRIX HAS YOU.\n\n"; exec bash'
+    ;;
+  focus) launch matrix_term ;;
+esac
+command -v notify-send >/dev/null && notify-send -a Matrix "Layout: ${preset^^}" -t 1500
+exit 0

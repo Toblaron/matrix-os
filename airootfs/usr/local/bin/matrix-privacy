@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Privacy mode (Super+P):
+#   on      random MAC on every connection, strict firewall, Tor running
+#           (SOCKS on 127.0.0.1:9050; prefix a command with `torsocks`)
+#   off     back to the hardware MAC, Tor stopped (firewall stays up)
+#   toggle  flip between the two
+#   status  what is actually active right now
+# The HUD's CONNECTION tag shows the result: TOR / VPN / SECURED / EXPOSED.
+set -u
+CONF=/etc/NetworkManager/conf.d/90-matrix-privacy.conf
+SUDO=""
+[ "$(id -u)" -ne 0 ] && SUDO=sudo
+
+status() {
+  local mac fw tor
+  [ -f "$CONF" ] && mac="random" || mac="hardware"
+  systemctl is-active -q nftables && fw="strict" || fw="off"
+  systemctl is-active -q tor && tor="running" || tor="stopped"
+  if [ "$mac" = random ] && [ "$tor" = running ]; then echo "PRIVACY: ON"; else echo "PRIVACY: OFF"; fi
+  echo "  mac address: $mac"
+  echo "  firewall:    $fw"
+  echo "  tor:         $tor"
+}
+
+reconnect() {
+  # re-activate the active connections so the new MAC policy applies
+  nmcli -t -f UUID connection show --active | while read -r uuid; do
+    $SUDO nmcli connection up uuid "$uuid" >/dev/null 2>&1 &
+  done
+  wait
+}
+
+on() {
+  $SUDO install -Dm644 /dev/stdin "$CONF" <<'EOF'
+# written by matrix-privacy
+[device]
+wifi.scan-rand-mac-address=yes
+[connection]
+wifi.cloned-mac-address=random
+ethernet.cloned-mac-address=random
+EOF
+  $SUDO systemctl reload NetworkManager
+  $SUDO systemctl start nftables tor
+  reconnect
+  notify-send -a Matrix "Privacy mode ON" "Random MAC · strict firewall · Tor on 127.0.0.1:9050" 2>/dev/null
+  matrix-say "Privacy mode on. They can't see you." &
+}
+
+off() {
+  $SUDO rm -f "$CONF"
+  $SUDO systemctl reload NetworkManager
+  $SUDO systemctl stop tor
+  reconnect
+  notify-send -a Matrix "Privacy mode OFF" "Hardware MAC · Tor stopped · firewall still up" 2>/dev/null
+}
+
+case "${1:-status}" in
+  on) on ;;
+  off) off ;;
+  toggle) if [ -f "$CONF" ]; then off; else on; fi ;;
+  status) status ;;
+  *) echo "usage: matrix-privacy on|off|toggle|status" >&2; exit 2 ;;
+esac

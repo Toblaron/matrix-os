@@ -1,0 +1,57 @@
+# Matrix OS boot splash: "Wake up, Neo..." typed out in green, then a pulsing cursor.
+Window.SetBackgroundTopColor(0.0, 0.02, 0.01);
+Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+
+lines[0] = "Wake up, Neo...";
+lines[1] = "The Matrix has you...";
+lines[2] = "Follow the white rabbit.";
+
+sprite = Sprite();
+cursor = Sprite();
+frame = 0;
+
+fun show(str) {
+  img = Image.Text(str, 0.24, 1.0, 0.45, 1, "monospace 22");
+  sprite.SetImage(img);
+  sprite.SetX(Window.GetWidth() / 10);
+  sprite.SetY(Window.GetHeight() / 2 - img.GetHeight() / 2);
+  return img;
+}
+
+fun refresh() {
+  # ~50 frames per second: type one character every 4 frames, hold each line
+  per_line = 160;
+  line = Math.Int(frame / per_line) % 3;
+  chars = Math.Int((frame % per_line) / 4);
+  str = lines[line];
+  shown = "";
+  for (i = 0; i < chars && i < str.Length(); i++)
+    shown = shown + str.CharAt(i);
+  img = show(shown);
+  blink = Math.Int(frame / 25) % 2;
+  if (blink == 0) {
+    cimg = Image.Text("_", 0.55, 1.0, 0.7, 1, "monospace 22");
+    cursor.SetImage(cimg);
+    cursor.SetX(Window.GetWidth() / 10 + img.GetWidth());
+    cursor.SetY(Window.GetHeight() / 2 - img.GetHeight() / 2);
+    cursor.SetOpacity(1);
+  } else {
+    cursor.SetOpacity(0);
+  }
+  frame++;
+}
+Plymouth.SetRefreshFunction(refresh);
+
+# disk-unlock prompts (installed systems with encryption)
+prompt = Sprite();
+fun display_password(text, bullets) {
+  s = text + "  ";
+  for (i = 0; i < bullets; i++) s = s + "*";
+  prompt.SetImage(Image.Text(s, 0.24, 1.0, 0.45, 1, "monospace 16"));
+  prompt.SetX(Window.GetWidth() / 10);
+  prompt.SetY(Window.GetHeight() / 2 + 60);
+  prompt.SetOpacity(1);
+}
+fun display_normal() { prompt.SetOpacity(0); }
+Plymouth.SetDisplayPasswordFunction(display_password);
+Plymouth.SetDisplayNormalFunction(display_normal);

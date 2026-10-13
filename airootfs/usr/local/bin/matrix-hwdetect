@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Prints `export` lines tuning the session for the GPU / hypervisor found.
+# Used by matrix-session:  eval "$(matrix-hwdetect)"
+#   matrix-hwdetect --describe   human readable summary
+virt=$(systemd-detect-virt 2>/dev/null || true)
+[ -z "$virt" ] && virt=none
+gpus=$(lspci -nn 2>/dev/null | grep -Ei 'vga|3d controller|display controller')
+
+profile=generic
+case "$gpus" in
+  *NVIDIA*) profile=nvidia ;;
+  *AMD* | *ATI*) profile=amd ;;
+  *Intel*) profile=intel ;;
+esac
+[ "$virt" != none ] && profile=vm
+
+if [ "${1:-}" = --describe ]; then
+  echo "profile:    $profile"
+  echo "hypervisor: $virt"
+  echo "${gpus:-no GPU found}" | sed 's/^/gpu:        /'
+  exit 0
+fi
+
+echo "export MATRIX_PROFILE=$profile"
+case $profile in
+  vm)
+    # virtual GPUs often lack GL acceleration: allow llvmpipe and go easy on it
+    echo "export WLR_RENDERER_ALLOW_SOFTWARE=1"
+    echo "export WLR_NO_HARDWARE_CURSORS=1"
+    echo "export MATRIX_RAIN_FPS=\${MATRIX_RAIN_FPS:-12}"
+    echo "export MATRIX_LOWFX=1"
+    ;;
+  nvidia)
+    echo "export WLR_NO_HARDWARE_CURSORS=1"
+    echo "export GBM_BACKEND=nvidia-drm"
+    echo "export __GLX_VENDOR_LIBRARY_NAME=nvidia"
+    echo "export LIBVA_DRIVER_NAME=nvidia"
+    ;;
+esac
+# no render node at all: software rendering is the only way in
+ls /dev/dri/renderD* >/dev/null 2>&1 || echo "export WLR_RENDERER_ALLOW_SOFTWARE=1"

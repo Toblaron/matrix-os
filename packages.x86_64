@@ -14,6 +14,8 @@ less
 pv
 
 # --- hardware / services
+nvidia-open
+nvidia-utils
 networkmanager
 bluez
 bluez-utils
@@ -30,6 +32,18 @@ waybar
 fuzzel
 kitty
 wlr-randr
+swaync
+libnotify
+swaylock
+swayidle
+wlopm
+cliphist
+wl-clipboard
+grim
+slurp
+imagemagick
+plymouth
+espeak-ng
 
 # --- matrix-hud
 gtk3
@@ -45,6 +59,21 @@ fastfetch
 ttf-firacode-nerd
 ttf-nerd-fonts-symbols-mono
 noto-fonts-emoji
+
+# --- privacy / security
+nftables
+tor
+torsocks
+wireguard-tools
+
+# --- installer / persistence
+arch-install-scripts
+squashfs-tools
+dosfstools
+e2fsprogs
+gptfdisk
+parted
+pciutils
 
 # --- recon toolkit
 curl

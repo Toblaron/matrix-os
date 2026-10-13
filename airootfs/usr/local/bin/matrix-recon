@@ -1,13 +1,130 @@
 #!/usr/bin/env bash
-GREEN='\033[0;32m'
-RESET='\033[0m'
-clear
-echo -e "${GREEN}PASSIVE MATRIX RECON${RESET}\n"
-read -rp "Enter target (domain/handle): " TARGET
+# Matrix recon: passive OSINT on a domain you own or are authorised to assess.
+# Passive modules only query public records and third-party sources; they send
+# nothing to the target itself. Every run is saved as a Markdown report in
+# ~/recon/, and discovered subdomains orbit on the HUD (recon graph).
+#
+#   matrix-recon                 interactive (fzf menu)
+#   matrix-recon <domain> [all]  run every passive module non-interactively
+set -u
+G='\033[1;32m' D='\033[2;32m' Y='\033[1;33m' R='\033[0m'
+REPORTS=$HOME/recon
+CACHE=$HOME/.cache/matrix
+mkdir -p "$REPORTS" "$CACHE"
+
+valid_domain() { [[ $1 =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; }
+
+TARGET=${1:-}
+if [ -z "$TARGET" ]; then
+  clear
+  echo -e "${G}MATRIX RECON${R} ${D}// passive OSINT${R}\n"
+  read -rp "Target domain: " TARGET
+fi
 [ -z "$TARGET" ] && exit 0
-CHOICE=$(printf "1. Certificate Transparency\n2. Historical URLs\n3. WHOIS Lookup" | fzf --prompt="Select Module > ")
-case "$CHOICE" in
-  *"Certificate"*) curl -s "https://crt.sh/?q=%25.${TARGET}&output=json" | jq -r '.[].name_value' | sort -u | less ;;
-  *"Historical"*)  curl -s "http://web.archive.org/cdx/search/cdx?url=*.${TARGET}/*&output=json&fl=original" | jq -r '.[1:][]' | less ;;
-  *"WHOIS"*)       whois "$TARGET" | less ;;
-esac
+valid_domain "$TARGET" || { echo "Not a domain name: $TARGET" >&2; exit 2; }
+
+REPORT=$REPORTS/$TARGET-$(date +%Y%m%d-%H%M%S).md
+SUBS=$(mktemp)
+trap 'rm -f "$SUBS"' EXIT
+printf '# Recon: %s\n\n_%s, passive sources only_\n' "$TARGET" "$(date -Is)" > "$REPORT"
+
+section() { printf '\n## %s\n\n```\n' "$1" >> "$REPORT"; echo -e "\n${G}== $1${R}"; }
+endsection() { printf '```\n' >> "$REPORT"; }
+out() { tee -a "$REPORT"; }
+
+m_ct() {
+  section "Certificate transparency (crt.sh)"
+  curl -fsS --max-time 60 "https://crt.sh/?q=%25.${TARGET}&output=json" |
+    jq -r '.[].name_value' 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/^\*\.//' |
+    grep -E "(^|\.)${TARGET//./\\.}$" | sort -u | tee -a "$SUBS" | out
+  endsection
+}
+
+m_subfinder() {
+  command -v subfinder >/dev/null || return 0
+  section "Passive subdomain sources (subfinder)"
+  subfinder -d "$TARGET" -silent -all 2>/dev/null | sort -u | tee -a "$SUBS" | out
+  endsection
+}
+
+m_dns() {
+  section "DNS records"
+  for t in A AAAA MX NS TXT CAA SOA; do
+    dig +short "$TARGET" "$t" 2>/dev/null | sed "s/^/$t  /"
+  done | out
+  endsection
+}
+
+m_asn() {
+  section "IP ownership (Team Cymru)"
+  for ip in $(dig +short "$TARGET" A | grep -E '^[0-9.]+$' | head -5); do
+    whois -h whois.cymru.com " -v $ip" 2>/dev/null | tail -n +2
+  done | out
+  endsection
+}
+
+m_whois() {
+  section "WHOIS"
+  whois "$TARGET" 2>/dev/null | grep -Ei 'registrar|creat|expir|updated|name server|status|org' |
+    head -40 | out
+  endsection
+}
+
+m_wayback() {
+  section "Historical URLs (Wayback Machine, first 200)"
+  curl -fsS --max-time 60 \
+    "https://web.archive.org/cdx/search/cdx?url=*.${TARGET}/*&output=json&fl=original&collapse=urlkey&limit=200" |
+    jq -r '.[1:][][0]' 2>/dev/null | out
+  endsection
+}
+
+m_breach() {
+  section "Breach exposure (Have I Been Pwned)"
+  if [ -z "${HIBP_API_KEY:-}" ]; then
+    echo "Set HIBP_API_KEY to check which breaches include addresses at $TARGET." | out
+  else
+    curl -fsS --max-time 30 -H "hibp-api-key: $HIBP_API_KEY" -H "user-agent: matrix-os-recon" \
+      "https://haveibeenpwned.com/api/v3/breaches?domain=$TARGET" |
+      jq -r '.[] | "\(.BreachDate)  \(.Name)  (\(.PwnCount) accounts)"' 2>/dev/null | out
+  fi
+  endsection
+}
+
+m_probe() { # active: touches the target's hosts
+  command -v httpx >/dev/null || return 0
+  echo -e "\n${Y}Live probing sends HTTP requests to every discovered host.${R}"
+  read -rp "Only continue if you are authorised to test $TARGET. Probe now? [y/N] " ok
+  [[ $ok == [yY] ]] || return 0
+  section "Live web hosts (httpx, active)"
+  sort -u "$SUBS" | httpx -silent -title -status-code -tech-detect -no-color 2>/dev/null | out
+  endsection
+}
+
+write_graph() {
+  sort -u "$SUBS" | jq -R . | jq -s --arg t "$TARGET" '{target: $t, nodes: .}' > "$CACHE/recon-graph.json"
+}
+
+passive=(m_ct m_subfinder m_dns m_asn m_whois m_wayback m_breach)
+if [ -n "${1:-}" ]; then
+  for m in "${passive[@]}"; do "$m"; done
+else
+  choice=$(printf '%s\n' "All passive modules" "Certificate transparency" "Passive subdomain sources" \
+    "DNS records" "IP ownership" "WHOIS" "Historical URLs" "Breach exposure" \
+    "Live web probe (active, needs authorisation)" | fzf --prompt="Module > " --height 14)
+  case "$choice" in
+    All*) for m in "${passive[@]}"; do "$m"; done ;;
+    Cert*) m_ct ;;
+    Passive*) m_subfinder ;;
+    DNS*) m_dns ;;
+    IP*) m_asn ;;
+    WHOIS) m_whois ;;
+    Hist*) m_wayback ;;
+    Breach*) m_breach ;;
+    Live*) m_ct; m_subfinder; m_probe ;;
+    *) exit 0 ;;
+  esac
+fi
+
+[ -s "$SUBS" ] && write_graph
+echo -e "\n${G}Report:${R} $REPORT  ${D}($(sort -u "$SUBS" | wc -l) hosts, shown on the HUD)${R}"
+[ -t 0 ] && [ -z "${1:-}" ] && { read -rsn1 -p "press any key"; echo; }

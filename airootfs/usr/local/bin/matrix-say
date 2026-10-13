@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Operator voice. Off by default; toggle with `matrix-say --enable/--disable`.
+# Uses Piper (natural, offline) when a voice model is installed, else espeak-ng.
+#   matrix-say "text"          speak (if enabled)
+#   matrix-say --setup         download the default Piper voice (~60 MB)
+CONF=$HOME/.config/matrix
+VOICES=$HOME/.local/share/matrix/voices
+VOICE_URL=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium
+mkdir -p "$CONF"
+
+case "${1:-}" in
+  --enable) touch "$CONF/voice"; echo "Operator voice on."; exit ;;
+  --disable) rm -f "$CONF/voice"; echo "Operator voice off."; exit ;;
+  --toggle) if [ -e "$CONF/voice" ]; then exec "$0" --disable; else exec "$0" --enable; fi ;;
+  --setup)
+    mkdir -p "$VOICES"
+    curl -fL --progress-bar -o "$VOICES/en_US-ryan-medium.onnx" "$VOICE_URL/en_US-ryan-medium.onnx" &&
+      curl -fsSL -o "$VOICES/en_US-ryan-medium.onnx.json" "$VOICE_URL/en_US-ryan-medium.onnx.json" &&
+      echo "Piper voice installed." && touch "$CONF/voice"
+    exit ;;
+  "") exit 0 ;;
+esac
+
+[ -e "$CONF/voice" ] || exit 0
+text="$*"
+model=$VOICES/en_US-ryan-medium.onnx
+if command -v piper-tts >/dev/null && [ -f "$model" ]; then
+  echo "$text" | piper-tts --model "$model" --output-raw 2>/dev/null |
+    pw-play --rate 22050 --channels 1 --format s16 - 2>/dev/null
+else
+  espeak-ng -v en-us -s 150 -p 30 "$text" 2>/dev/null
+fi

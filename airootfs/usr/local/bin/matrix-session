@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Starts the Matrix OS desktop on tty1 (called from ~/.bash_profile).
+#   - tunes the environment for the GPU / VM (matrix-hwdetect)
+#   - red pill / blue pill: full HUD desktop, or a calm low-power one
+#   - keeps Wayfire's log, keeps the last crash log, stops crash loops
+STATE=$HOME/.local/state/matrix
+CONF=$HOME/.config
+mkdir -p "$STATE" "$HOME/.cache/matrix"
+
+eval "$(matrix-hwdetect)"
+
+# swap in the glowing pixdecor decorations once the plugin is available
+if [ -e /usr/lib/wayfire/libpixdecor.so ] && grep -q '^plugins = .*\bdecoration\b' "$CONF/wayfire.ini"; then
+  sed -i '/^plugins = /s/\bdecoration\b/pixdecor/' "$CONF/wayfire.ini"
+fi
+
+choose_pill() {
+  [ -n "$MATRIX_MODE" ] && return
+  grep -q 'matrix.selftest=1' /proc/cmdline && { MATRIX_MODE=red; return; }
+  grep -q 'matrix.mode=blue' /proc/cmdline && { MATRIX_MODE=blue; return; }
+  clear
+  printf '\n\n\e[1;32m   This is your last chance.\e[0m\n\n'
+  printf '   \e[1;31m[R]\e[0m red pill   - the full Matrix: digital rain, HUD, 3D cube\n'
+  printf '   \e[1;34m[B]\e[0m blue pill  - calm desktop: no rain, no effects, saves power\n\n'
+  printf '   \e[2mred pill in 5s...\e[0m '
+  read -rsn1 -t 5 key
+  case $key in b | B) MATRIX_MODE=blue ;; *) MATRIX_MODE=red ;; esac
+}
+choose_pill
+export MATRIX_MODE
+
+if [ "$MATRIX_MODE" = blue ]; then
+  # derive the calm profile from the user's config so their edits carry over
+  sed -e '/^plugins = /{s/ blur\b//; s/ cube\b//; s/ wobbly\b//}' \
+      -e 's/^hud = .*/hud = env MATRIX_HUD_MODE=calm matrix-hud/' \
+      -e '/^layout = /d' -e '/^intro = /d' \
+      -e 's/^close_animation = .*/close_animation = fade/' \
+      "$CONF/wayfire.ini" > "$CONF/wayfire-blue.ini"
+  export WAYFIRE_CONFIG_FILE=$CONF/wayfire-blue.ini
+else
+  export WAYFIRE_CONFIG_FILE=$CONF/wayfire.ini
+fi
+
+crashes=()
+while true; do
+  [ -f "$STATE/wayfire.log" ] && mv -f "$STATE/wayfire.log" "$STATE/wayfire.prev.log"
+  start=$(date +%s)
+  wayfire > "$STATE/wayfire.log" 2>&1
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    # "Exit Wayfire" from the power menu: drop to a shell instead of restarting
+    export MATRIX_NO_SESSION=1
+    clear
+    echo "Left the Matrix. Type 'matrix-session' to go back in."
+    exec bash --login
+  fi
+
+  echo "$(date -Is) rc=$rc" >> "$STATE/crashes"
+  cp -f "$STATE/wayfire.log" "$STATE/last-crash.log"
+  now=$(date +%s)
+  crashes+=("$now")
+  recent=0
+  for t in "${crashes[@]}"; do ((now - t < 120)) && ((recent++)); done
+  if ((recent >= 3 || now - start < 5 && recent >= 2)); then
+    export MATRIX_NO_SESSION=1
+    printf '\n\e[1;31mWayfire keeps crashing (exit %s).\e[0m\n' "$rc"
+    echo "Log: $STATE/last-crash.log      Hardware: $(matrix-hwdetect --describe | head -1)"
+    echo "Try 'MATRIX_MODE=blue matrix-session'."
+    exec bash --login
+  fi
+  echo "Wayfire exited with $rc, restarting..."
+  sleep 2
+done

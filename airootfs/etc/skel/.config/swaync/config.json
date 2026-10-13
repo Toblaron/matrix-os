@@ -1,0 +1,20 @@
+{
+  "$schema": "/etc/xdg/swaync/configSchema.json",
+  "positionX": "right",
+  "positionY": "top",
+  "layer": "overlay",
+  "control-center-margin-top": 50,
+  "control-center-margin-right": 10,
+  "control-center-width": 420,
+  "notification-window-width": 400,
+  "timeout": 6,
+  "timeout-low": 3,
+  "timeout-critical": 0,
+  "fit-to-screen": true,
+  "hide-on-clear": true,
+  "widgets": ["title", "dnd", "notifications"],
+  "widget-config": {
+    "title": { "text": "INCOMING TRANSMISSIONS", "clear-all-button": true, "button-text": "clear" },
+    "dnd": { "text": "do not disturb" }
+  }
+}

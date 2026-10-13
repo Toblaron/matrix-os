@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Adds a persistence partition to the Matrix OS USB stick you booted from, so
+# files and settings survive reboots. Then pick "Matrix OS (persistent)" in the
+# boot menu. Uses the free space after the ISO image on the same stick.
+set -euo pipefail
+G='\e[1;32m' Y='\e[1;33m' R='\e[0m'
+LABEL=MATRIX_PERSIST
+[ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+
+if blkid -L "$LABEL" >/dev/null 2>&1; then
+  echo -e "${G}Persistence partition already exists:${R} $(blkid -L $LABEL)"
+  echo "Boot 'Matrix OS (persistent)' to use it."
+  exit 0
+fi
+
+src=$(findmnt -no SOURCE /run/archiso/bootmnt 2>/dev/null) ||
+  { echo "Not booted from a Matrix OS USB stick." >&2; exit 1; }
+disk=/dev/$(lsblk -no PKNAME "$src")
+free=$(sfdisk -F "$disk" 2>/dev/null | awk '/^Unpartitioned space/ {print $(NF-1), $NF; exit}')
+echo -e "${G}USB stick:${R} $disk   ${G}free space:${R} ${free:-unknown}"
+lsblk "$disk"
+echo -e "\n${Y}A new ext4 partition labelled $LABEL will be created in the free space.${R}"
+echo "Existing partitions (the ISO) are not touched."
+read -rp "Continue? [y/N] " ok
+[[ $ok == [yY] ]] || exit 0
+
+echo ',,L' | sfdisk --append --no-reread "$disk"
+partprobe "$disk" || partx -u "$disk"
+sleep 2
+newpart=$(lsblk -lnpo NAME "$disk" | tail -1)
+mkfs.ext4 -F -L "$LABEL" "$newpart"
+echo -e "\n${G}Done.${R} Reboot and choose 'Matrix OS (persistent)' to keep your changes."

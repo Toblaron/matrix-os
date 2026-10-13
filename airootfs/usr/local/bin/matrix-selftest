@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Boot self-test, only active with matrix.selftest=1 on the kernel command line
+# (see scripts/selftest-in-container.sh). Reports progress on the serial port.
+out=/dev/ttyS0
+say() { echo "MATRIX_SELFTEST: $*" > "$out"; }
+
+say "booted ($(systemd-detect-virt 2>/dev/null))"
+missing=""
+for _ in $(seq 1 300); do
+  missing=""
+  pgrep -x wayfire >/dev/null || missing+=" wayfire"
+  pgrep -x waybar >/dev/null || missing+=" waybar"
+  pgrep -f matrix-hud >/dev/null || missing+=" matrix-hud"
+  [ -z "$missing" ] && break
+  sleep 1
+done
+
+if [ -n "$missing" ]; then
+  say "FAIL: not running:$missing"
+  tail -n 60 /root/.local/state/matrix/wayfire.log > "$out" 2>/dev/null
+  journalctl -b -p warning -n 60 --no-pager > "$out"
+else
+  sleep 30 # let the rain fill the screen and the layout windows open
+  say "layout windows: $(pgrep -fc -- '--class matrix_')"
+  say "failed units: $(systemctl --failed --no-legend | awk '{print $2}' | xargs)"
+  say "READY"
+  sleep 20
+  say "PASS"
+fi
+say "DONE"
+sleep 3
+systemctl poweroff

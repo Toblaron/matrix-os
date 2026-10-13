@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Screenshots: matrix-shot area|screen|window  (saved to ~/Pictures/Matrix and copied)
+dir=$HOME/Pictures/Matrix
+mkdir -p "$dir"
+file=$dir/matrix-$(date +%Y%m%d-%H%M%S).png
+case "${1:-area}" in
+  area)   geom=$(slurp -b 00140866 -c 3dff74ff -s 3dff7422 -w 2) || exit 1
+          grim -g "$geom" "$file" ;;
+  screen) grim "$file" ;;
+  *)      echo "usage: matrix-shot area|screen" >&2; exit 2 ;;
+esac
+wl-copy < "$file"
+notify-send -a Matrix -i "$file" "Screenshot saved" "$file"

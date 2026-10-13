@@ -29,7 +29,7 @@
   "custom/rain":     { "format": "", "tooltip-format": "Digital rain", "on-click": "kitty --class matrix_rain -e cmatrix -b -u 4 -C green" },
   "custom/viz":      { "format": "󰺢", "tooltip-format": "Audio visualizer", "on-click": "kitty --class matrix_viz -e cava" },
   "custom/settings": { "format": "", "tooltip-format": "Edit Wayfire config", "on-click": "kitty -e nano ~/.config/wayfire.ini" },
-  "custom/files":    { "format": "󰆓", "tooltip-format": "Restore desktop layout", "on-click": "matrix-layout" },
+  "custom/files":    { "format": "󰕮", "tooltip-format": "Layout presets (Super+1..4)", "on-click": "matrix-layout --reset" },
 
   "clock": {
     "interval": 1,
@@ -51,7 +51,7 @@
 
   "group/tray": {
     "orientation": "horizontal",
-    "modules": ["battery", "network", "bluetooth", "pulseaudio", "custom/power"]
+    "modules": ["custom/privacy", "custom/notify", "battery", "network", "bluetooth", "pulseaudio", "custom/power"]
   },
   "battery": {
     "format": "{icon} {capacity}%",
@@ -78,6 +78,21 @@
     "format-icons": { "default": ["", "", ""] },
     "tooltip-format": "{volume}%",
     "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+  },
+  "custom/privacy": {
+    "exec": "matrix-privacy status | head -1 | grep -q ON && echo '{\"text\":\"󰒃\",\"class\":\"on\",\"tooltip\":\"Privacy mode ON\"}' || echo '{\"text\":\"󰦞\",\"class\":\"off\",\"tooltip\":\"Privacy mode off (Super+P)\"}'",
+    "return-type": "json",
+    "interval": 5,
+    "on-click": "matrix-privacy toggle"
+  },
+  "custom/notify": {
+    "exec": "swaync-client -swb",
+    "return-type": "json",
+    "format": "{icon}",
+    "format-icons": { "notification": "󰂚", "none": "󰂜", "dnd-notification": "󰂛", "dnd-none": "󰂛" },
+    "on-click": "swaync-client -t -sw",
+    "on-click-right": "swaync-client -d -sw",
+    "escape": true
   },
   "custom/power": { "format": "⏻", "tooltip-format": "Power", "on-click": "matrix-power" }
 }

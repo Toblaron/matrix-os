@@ -1,0 +1,8 @@
+[Unit]
+Description=Matrix OS boot self-test
+ConditionKernelCommandLine=matrix.selftest=1
+After=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/matrix-selftest

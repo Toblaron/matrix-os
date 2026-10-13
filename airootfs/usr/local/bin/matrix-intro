@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# First-login intro: "Wake up, Neo..." typed out in a fullscreen terminal.
+#   matrix-intro          run it in a fullscreen kitty (once per user)
+#   matrix-intro --play   play it in the current terminal
+FLAG=$HOME/.local/state/matrix/intro-done
+if [ "${1:-}" != --play ]; then
+  [ -e "$FLAG" ] && exit 0
+  grep -q 'matrix.selftest=1' /proc/cmdline && exit 0
+  mkdir -p "$(dirname "$FLAG")" && touch "$FLAG"
+  exec kitty --class matrix_intro --start-as fullscreen -o background_opacity=1 "$0" --play
+fi
+
+type_out() { # text, delay
+  local s=$1 i
+  for ((i = 0; i < ${#s}; i++)); do printf '%s' "${s:i:1}"; sleep "${2:-0.07}"; done
+}
+G='\e[1;32m' R='\e[0m'
+printf '\e[?25l'; clear; sleep 1.2
+printf "$G"
+for line in "Wake up, Neo..." "The Matrix has you..." "Follow the white rabbit."; do
+  printf '\n  '; type_out "$line" 0.09; sleep 2.2; clear
+done
+printf '\n  '; type_out "Knock, knock, Neo." 0.05; sleep 1.5
+printf "$R\n\n  \e[2mSuper+Enter terminal · Super+Space apps · Super+1..4 layouts · Super+Esc power\e[0m\n"
+sleep 3
+printf '\e[?25h'

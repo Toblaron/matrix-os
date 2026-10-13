@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Installs Matrix OS from the running live system onto a disk.
+# Copies the live root filesystem (packages + Matrix configs), then makes it a
+# normal installed system: your own user, no autologin, systemd-boot (UEFI).
+#
+# THE TARGET DISK IS ERASED COMPLETELY. Run as root from the live ISO.
+set -euo pipefail
+G='\e[1;32m' Y='\e[1;33m' RED='\e[1;31m' R='\e[0m'
+die() { echo -e "${RED}$*${R}" >&2; exit 1; }
+step() { echo -e "\n${G}==> $*${R}"; }
+
+[ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+BOOTMNT=/run/archiso/bootmnt
+SFS=$(ls $BOOTMNT/*/x86_64/airootfs.sfs 2>/dev/null | head -1)
+[ -n "$SFS" ] || die "Run this from the Matrix OS live system (no airootfs.sfs found)."
+INSTALL_DIR=$(basename "$(dirname "$(dirname "$SFS")")")
+[ -d /sys/firmware/efi ] || die "This installer needs a UEFI boot (systemd-boot). Reboot the ISO in UEFI mode."
+
+clear
+echo -e "${G}MATRIX OS INSTALLER${R}\n"
+live_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE $BOOTMNT 2>/dev/null)" 2>/dev/null || true)
+mapfile -t disks < <(lsblk -dnpo NAME,SIZE,MODEL -e 7,11 | grep -v "^/dev/${live_disk:-none} ")
+((${#disks[@]})) || die "No target disk found."
+disk=$(printf '%s\n' "${disks[@]}" | fzf --prompt="Install to disk > " --height 12 | awk '{print $1}')
+[ -n "$disk" ] || exit 0
+
+read -rp "Hostname [nebuchadnezzar]: " host; host=${host:-nebuchadnezzar}
+read -rp "Username: " user
+[[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid username."
+while true; do
+  read -rsp "Password for $user: " pw1; echo
+  read -rsp "Repeat password: " pw2; echo
+  [ -n "$pw1" ] && [ "$pw1" = "$pw2" ] && break
+  echo "Passwords empty or different, try again."
+done
+tz=$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)
+read -rp "Timezone [$tz]: " tzin; tz=${tzin:-$tz}
+[ -e "/usr/share/zoneinfo/$tz" ] || die "Unknown timezone: $tz"
+
+echo -e "\n${Y}Everything on $disk will be destroyed:${R}"
+lsblk "$disk"
+read -rp "Type the disk name ($disk) to confirm: " confirm
+[ "$confirm" = "$disk" ] || die "Aborted."
+
+step "Partitioning $disk (1 GiB EFI + root)"
+umount -R /mnt 2>/dev/null || true
+wipefs -af "$disk"
+sgdisk --zap-all "$disk"
+sgdisk -n1:0:+1G -t1:ef00 -c1:MATRIX_EFI -n2:0:0 -t2:8304 -c2:MATRIX_ROOT "$disk"
+partprobe "$disk"; sleep 2
+part() { lsblk -lnpo NAME "$disk" | sed -n "$((1 + $1))p"; }
+esp=$(part 1) root=$(part 2)
+mkfs.fat -F32 -n MATRIX_EFI "$esp"
+mkfs.ext4 -F -L matrix-root "$root"
+mount "$root" /mnt
+mount --mkdir "$esp" /mnt/boot
+
+step "Copying the system (this takes a few minutes)"
+unsquashfs -f -d /mnt "$SFS"
+cp "$BOOTMNT/$INSTALL_DIR/boot/x86_64/vmlinuz-linux" /mnt/boot/
+genfstab -U /mnt > /mnt/etc/fstab
+
+step "Configuring the installed system"
+# live-only pieces
+rm -rf /mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf \
+       /mnt/etc/mkinitcpio.conf.d/archiso.conf \
+       /mnt/etc/systemd/journald.conf.d/volatile-storage.conf \
+       /mnt/etc/systemd/system/etc-pacman.d-gnupg.mount \
+       /mnt/etc/systemd/system/pacman-init.service
+# keep the service pull-ins the live drop-in provided, without the autologin
+install -Dm644 /dev/stdin /mnt/etc/systemd/system/getty@tty1.service.d/matrix.conf <<'EOF'
+[Unit]
+Wants=NetworkManager.service bluetooth.service nftables.service
+EOF
+echo "$host" > /mnt/etc/hostname
+ln -sf "/usr/share/zoneinfo/$tz" /mnt/etc/localtime
+cat > /mnt/etc/mkinitcpio.d/linux.preset <<'EOF'
+ALL_kver="/boot/vmlinuz-linux"
+PRESETS=('default')
+default_image="/boot/initramfs-linux.img"
+EOF
+
+arch-chroot /mnt /bin/bash -e <<EOF
+pacman-key --init >/dev/null && pacman-key --populate >/dev/null
+passwd -l root >/dev/null
+useradd -m -G wheel -s /bin/bash "$user"
+echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/10-wheel
+chmod 440 /etc/sudoers.d/10-wheel
+chown -R "$user:$user" /home/$user
+hwclock --systohc || true
+sed -i "/^HOOKS=/s/\(udev\|systemd\)/& plymouth/" /etc/mkinitcpio.conf
+mkinitcpio -P
+bootctl install
+EOF
+echo "$user:$pw1" | arch-chroot /mnt chpasswd
+unset pw1 pw2
+
+# the user logs in on tty1 and the session starts from ~/.bash_profile as usual
+uuid=$(blkid -s UUID -o value "$root")
+mkdir -p /mnt/boot/loader/entries
+cat > /mnt/boot/loader/loader.conf <<'EOF'
+default matrix-os.conf
+timeout 3
+EOF
+cat > /mnt/boot/loader/entries/matrix-os.conf <<EOF
+title   Matrix OS
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+options root=UUID=$uuid rw quiet splash nvidia_drm.modeset=1
+EOF
+
+sync
+umount -R /mnt
+step "Installed. Remove the USB and reboot. Log in as '$user' on tty1."

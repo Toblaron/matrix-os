@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Idle handling: screen off after 15 min; on installed systems also lock after
+# 10 min and before sleep (the live session's root has no password, so a lock
+# there would protect nothing).
+
+args=(timeout 900 'wlopm --off "*" 2>/dev/null' resume 'wlopm --on "*" 2>/dev/null')
+if [ ! -d /run/archiso ]; then
+  args=(timeout 600 matrix-lock before-sleep matrix-lock "${args[@]}")
+fi
+exec swayidle -w "${args[@]}"

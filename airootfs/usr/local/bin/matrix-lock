@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Lock screen: blurred snapshot of the desktop with green Matrix styling.
+img=/tmp/matrix-lock-$UID.png
+if grim -s 0.5 /tmp/matrix-lock-raw-$UID.png 2>/dev/null; then
+  magick /tmp/matrix-lock-raw-$UID.png -blur 0x6 -fill '#001a08' -colorize 45% "$img" 2>/dev/null ||
+    cp /tmp/matrix-lock-raw-$UID.png "$img"
+  rm -f /tmp/matrix-lock-raw-$UID.png
+  bg=(--image "$img" --scaling fill)
+else
+  bg=(--color 000805)
+fi
+exec swaylock "${bg[@]}" --daemonize \
+  --font "FiraCode Nerd Font" --indicator-radius 90 --indicator-thickness 8 \
+  --inside-color 00140899 --ring-color 1f8f45ff --key-hl-color 3dff74ff --bs-hl-color ff3d3dff \
+  --line-color 00000000 --separator-color 00000000 --text-color 3dff74ff \
+  --inside-ver-color 00140899 --ring-ver-color 8dffb0ff --text-ver-color 8dffb0ff \
+  --inside-wrong-color 1a000099 --ring-wrong-color ff3d3dff --text-wrong-color ff3d3dff \
+  --inside-clear-color 00140899 --ring-clear-color 3dff74ff --text-clear-color 3dff74ff

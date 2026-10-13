@@ -3,8 +3,12 @@ name: Build Matrix OS ISO
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-iso:
@@ -15,15 +19,41 @@ jobs:
 
       - name: Build ISO inside Arch Linux container
         run: |
-          docker run --privileged --rm -v "$PWD":/workspace -w /workspace archlinux:latest bash -c "
+          docker run --privileged --rm -v "$PWD":/workspace archlinux:latest bash -c '
             set -e
-            pacman -Syu --noconfirm archiso
-            mkdir -p dist
-            mkarchiso -v -w /tmp/archiso-work -o dist .
-          "
+            pacman -Sy --noconfirm --needed git >/dev/null
+            git config --global --add safe.directory "*"
+            git clone -q /workspace /tmp/src
+            bash /tmp/src/scripts/build-in-container.sh
+          '
 
-      - name: Upload bootable ISO
+      - name: Enable KVM for the boot test
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - name: Boot self-test (QEMU)
+        run: |
+          docker run --privileged --rm --device /dev/kvm -v "$PWD":/workspace archlinux:latest \
+            bash /workspace/scripts/selftest-in-container.sh
+
+      - name: Upload ISO and test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: matrix-os-x86_64
-          path: dist/*.iso
+          path: |
+            dist/*.iso
+            dist/matrix-os.sha256
+            dist/selftest.png
+            dist/selftest-serial.log
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.iso
+            dist/matrix-os.sha256
+            dist/selftest.png
+          generate_release_notes: true

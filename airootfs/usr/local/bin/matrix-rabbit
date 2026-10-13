@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# You followed the white rabbit. Shows a random Matrix OS tip.
+G='\e[1;32m' D='\e[2;32m' R='\e[0m'
+tips=(
+  "Super+Ctrl+Left/Right spins the 3D workspace cube. Super+drag grabs it."
+  "Super+1..4 switch layouts: Hacker, Focus, Monitor, Cinema."
+  "Super+P toggles privacy mode: random MAC, strict firewall, Tor."
+  "Super+O starts passive recon; the results orbit on the HUD."
+  "Super+V opens clipboard history, Print takes an area screenshot."
+  "matrix-install puts Matrix OS on a disk. matrix-persist keeps the USB's changes."
+  "The red glyphs in the rain are packets your firewall just dropped."
+  "When the status reads DEJA VU, a watched system file just changed. Check it."
+  "Blue pill at boot (press B) gives a calm desktop that saves battery."
+  "matrix-say --enable gives the Operator a voice."
+)
+clear
+printf "\n${D}   (\\\\(\\\\ \n   ( -.-)\n   o_(\")(\")${R}\n\n"
+printf "${G}   Knock, knock, Neo.${R}\n\n   %s\n\n" "${tips[RANDOM % ${#tips[@]}]}"
+printf "${D}   press any key${R}"
+read -rsn1

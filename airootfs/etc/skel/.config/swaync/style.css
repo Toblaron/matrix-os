@@ -1,0 +1,43 @@
+* {
+  font-family: "FiraCode Nerd Font", monospace;
+  font-size: 13px;
+  color: #3dff74;
+}
+
+.notification-row { outline: none; background: transparent; }
+
+.notification {
+  background: rgba(0, 18, 8, 0.88);
+  border: 1px solid rgba(61, 255, 116, 0.7);
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(61, 255, 116, 0.35);
+  margin: 6px;
+  padding: 0;
+}
+
+.notification.critical { border-color: #ff3d3d; box-shadow: 0 0 8px rgba(255, 61, 61, 0.5); }
+.notification.critical * { color: #ff8a80; }
+
+.summary { font-weight: bold; color: #8dffb0; }
+.body { color: #3dff74; }
+.time { color: rgba(61, 255, 116, 0.6); }
+
+.close-button {
+  background: rgba(61, 255, 116, 0.15);
+  border-radius: 4px;
+  color: #3dff74;
+}
+
+.control-center {
+  background: rgba(0, 12, 5, 0.92);
+  border: 1px solid rgba(61, 255, 116, 0.7);
+  border-radius: 10px;
+}
+
+.widget-title > label { font-weight: bold; letter-spacing: 2px; }
+.widget-title > button, .widget-dnd > switch {
+  background: rgba(61, 255, 116, 0.12);
+  border: 1px solid rgba(61, 255, 116, 0.5);
+  border-radius: 6px;
+}
+.widget-dnd > switch:checked { background: rgba(61, 255, 116, 0.45); }
