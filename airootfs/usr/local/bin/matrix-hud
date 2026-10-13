@@ -517,7 +517,9 @@ class Rain:
         self.win.connect("draw", self.on_draw)
         self.win.connect("size-allocate", self.on_resize)
         self.win.show_all()
-        GLib.timeout_add(int(1000 / max(fps, 1)), self.tick)
+        self.interval = 1000 / max(fps, 1)
+        self.slow_logged = False
+        self.schedule(self.interval)
 
     def on_resize(self, _w, alloc):
         if self.surface and (self.surface.get_width(), self.surface.get_height()) == (
@@ -571,9 +573,28 @@ class Rain:
             cr.paint()
             self.win.queue_draw()
 
+    def schedule(self, delay_ms):
+        # below GTK's redraw priority: on a slow machine a rain step can take
+        # longer than the frame interval, and a default-priority timer would
+        # then starve every redraw (the HUD's other windows never got mapped)
+        GLib.timeout_add(int(delay_ms), self.tick, priority=GLib.PRIORITY_LOW)
+
     def tick(self):
+        start = time.monotonic()
+        self.step()
+        took = (time.monotonic() - start) * 1000
+        # back off instead of falling behind: always leave the CPU at least
+        # as much idle time as a step costs
+        delay = max(self.interval, took * 2)
+        if delay > self.interval * 1.5 and not self.slow_logged:
+            self.slow_logged = True
+            log(f"rain: slow machine, step {took:.0f} ms, frame interval {delay:.0f} ms")
+        self.schedule(delay)
+        return False
+
+    def step(self):
         if not self.surface or not self.enabled:
-            return True
+            return
         load = self.stats.cpu / 100
         speed = 0.65 + 1.4 * load
         lift = 0.85 + 0.3 * load
@@ -612,7 +633,6 @@ class Rain:
             y = random.randrange(1, self.rows) * self.CELL
             self.glyph(cr, random.choice(GLYPHS), x, y, self.CELL - 3, (0.02, 0.22, 0.08))
         self.win.queue_draw()
-        return True
 
     def on_draw(self, _w, cr):
         if not getattr(self, "_drawn", False):
