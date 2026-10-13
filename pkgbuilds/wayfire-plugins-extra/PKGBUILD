@@ -2,19 +2,30 @@
 # stuck on 0.10). Ships pixdecor (rounded, glowing decorations) and shadows.
 pkgname=wayfire-plugins-extra
 pkgver=0.11.2
-pkgrel=1
+pkgrel=2
+# pixdecor/shadows are git subprojects whose wraps track HEAD; pin them to the
+# commits that match wayfire 0.11 (pixdecor moved to the 0.12 API in Oct 2026)
+_pixdecor=a9465be50560bfb6430923bddc56a4c368341148
+_shadows=4bfdbbf1abe40519183b9a1e1648a732bc656f13
 pkgdesc='Additional plugins for Wayfire, incl. pixdecor and wayfire-shadows'
 arch=(x86_64)
 url=https://github.com/WayfireWM/wayfire-plugins-extra
 license=(MIT)
 depends=(wayfire glibmm libevdev boost-libs librsvg cairo)
 makedepends=(git meson ninja boost nlohmann-json glm vulkan-headers wayland-protocols)
-source=("git+$url.git#tag=v$pkgver")
-sha256sums=(SKIP)
+source=("git+$url.git#tag=v$pkgver"
+        "pixdecor::git+https://github.com/soreau/pixdecor.git#commit=$_pixdecor"
+        "wayfire-shadows::git+https://github.com/timgott/wayfire-shadows.git#commit=$_shadows")
+sha256sums=(SKIP SKIP SKIP)
+
+prepare() {
+  # meson uses an existing subprojects/<name> checkout instead of the wrap
+  ln -sfn "$srcdir/pixdecor" $pkgname/subprojects/pixdecor
+  ln -sfn "$srcdir/wayfire-shadows" $pkgname/subprojects/wayfire-shadows
+}
 
 build() {
-  # pixdecor/shadows are git subprojects that track their own HEAD; if they
-  # stop compiling against wayfire 0.11, still ship the core extra plugins.
+  # if the pinned pixdecor/shadows still fail, ship the core extra plugins
   if ! { arch-meson $pkgname build -Dpixdecor=true -Dwayfire_shadows=true &&
          meson compile -C build; }; then
     echo "==> pixdecor/shadows failed to build, continuing without them"

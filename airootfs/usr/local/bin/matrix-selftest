@@ -10,7 +10,7 @@ for _ in $(seq 1 300); do
   missing=""
   pgrep -x wayfire >/dev/null || missing+=" wayfire"
   pgrep -x waybar >/dev/null || missing+=" waybar"
-  pgrep -f matrix-hud >/dev/null || missing+=" matrix-hud"
+  pgrep -f 'python3? .*matrix-hud' >/dev/null || missing+=" matrix-hud"
   [ -z "$missing" ] && break
   sleep 1
 done
@@ -29,8 +29,11 @@ else
 ' ' ')"
   say "--- hud / client errors from wayfire.log"
   grep -aiE 'traceback|error|exception|matrix-hud|kitty|gtk|layer' "$log" | grep -v '^EE.*EGL' | tail -n 40 > "$out"
+  alive() { pgrep -f 'python3? .*matrix-hud' >/dev/null && pgrep -x wayfire >/dev/null && pgrep -x waybar >/dev/null; }
+  alive || { say "FAIL: HUD/compositor died after start"; say DONE; sleep 3; systemctl poweroff; exit 1; }
   say "READY"
   sleep 60
+  alive || { say "FAIL: HUD/compositor died later"; say DONE; sleep 3; systemctl poweroff; exit 1; }
   say "READY2"
   sleep 15
   say "PASS"

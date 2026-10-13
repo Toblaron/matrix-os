@@ -51,7 +51,10 @@ fi
 case $preset in monitor) mode=monitor ;; cinema) mode=cinema ;; *) mode=full ;; esac
 [ "${MATRIX_MODE:-red}" = blue ] && mode=calm
 echo "$mode" > "$STATE/hud-mode"
-pkill -USR1 -f matrix-hud
+# only signal a HUD that is up (it re-reads hud-mode on start anyway)
+for pid in $(pgrep -f 'python3? .*matrix-hud'); do
+  [ "$(ps -o etimes= -p "$pid" | tr -d ' ')" -ge 5 ] 2>/dev/null && kill -USR1 "$pid"
+done
 
 # close windows that don't belong to this preset, open the ones that do
 pkill -f -- '--class matrix_(rain|fetch|viz|term)( |$)'

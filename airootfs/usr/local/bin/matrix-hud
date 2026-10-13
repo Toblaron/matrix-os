@@ -21,12 +21,17 @@ Modes (MATRIX_HUD_MODE or ~/.cache/matrix/hud-mode, re-read on SIGUSR1):
 Env:
   MATRIX_RAIN_FPS   frames per second of the rain (default 20, 0 disables)
 """
-import json
-import math
-import os
-import random
 import signal
-import socket
+
+# matrix-layout sends SIGUSR1 to switch modes; until the GLib handler is in
+# place the default action would kill us, and imports are slow on weak CPUs
+signal.signal(signal.SIGUSR1, signal.SIG_IGN)
+
+import json  # noqa: E402
+import math  # noqa: E402
+import os  # noqa: E402
+import random  # noqa: E402
+import socket  # noqa: E402
 import subprocess
 import time
 from collections import deque

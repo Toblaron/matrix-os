@@ -32,6 +32,7 @@ build_pkg() { # <dir with PKGBUILD>
     # a split/renamed package still installs under its pkgname
     built+=("$(cd "$dir" && sudo -u builder makepkg --printsrcinfo | awk '/^pkgname/ {print $3; exit}')")
     echo "   built $name"
+    grep -h "^==> pixdecor" "$dir.log" | sed "s/^/   /" || true
   else
     echo "   WARN: $name failed to build (log: $dir.log)"
     tail -n 15 "$dir.log" | sed 's/^/      /'
