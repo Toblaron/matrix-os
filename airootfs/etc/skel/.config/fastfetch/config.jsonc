@@ -1,0 +1,30 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "file",
+    "source": "/usr/share/matrix-os/logo.txt",
+    "color": { "1": "38;2;61;255;116", "2": "38;2;141;255;176" },
+    "padding": { "top": 1, "right": 4 }
+  },
+  "display": {
+    "separator": ": ",
+    "color": { "keys": "38;2;141;255;176", "title": "38;2;61;255;116", "output": "38;2;61;255;116" }
+  },
+  "modules": [
+    { "type": "custom", "format": "\u001b[1mMatrix OS" },
+    { "type": "custom", "format": "---------" },
+    { "type": "os", "format": "Matrix Linux {arch}" },
+    { "type": "host", "format": "Nebuchadnezzar ({name})" },
+    "kernel",
+    "wm",
+    "terminal",
+    "shell",
+    "cpu",
+    "gpu",
+    "memory",
+    "disk",
+    "uptime",
+    "break",
+    { "type": "colors", "symbol": "block" }
+  ]
+}

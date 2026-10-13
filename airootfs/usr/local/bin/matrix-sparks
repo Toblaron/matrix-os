@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Waybar feed: `matrix-sparks cpu` -> CPU sparkline, `matrix-sparks ram` -> RAM bar."""
+import json
+import sys
+import time
+from collections import deque
+
+import psutil
+
+BLOCKS = "▁▂▃▄▅▆▇█"
+
+
+def emit(textv, tooltip, pct):
+    print(json.dumps({"text": textv, "tooltip": tooltip, "percentage": int(pct)}), flush=True)
+
+
+def cpu():
+    hist = deque([0.0] * 14, maxlen=14)
+    psutil.cpu_percent()
+    while True:
+        time.sleep(1)
+        p = psutil.cpu_percent()
+        hist.append(p)
+        line = "".join(BLOCKS[min(int(v / 100 * len(BLOCKS)), len(BLOCKS) - 1)] for v in hist)
+        emit(f"CPU {line}", f"CPU {p:.0f}%", p)
+
+
+def ram():
+    while True:
+        m = psutil.virtual_memory()
+        filled = round(m.percent / 100 * 12)
+        bar = "━" * filled + "╌" * (12 - filled)
+        emit(f"RAM {bar}", f"RAM {m.used / 2**30:.1f} / {m.total / 2**30:.1f} GiB", m.percent)
+        time.sleep(2)
+
+
+{"cpu": cpu, "ram": ram}[sys.argv[1] if len(sys.argv) > 1 else "cpu"]()

@@ -3,6 +3,7 @@ name: Build Matrix OS ISO
 on:
   push:
     branches: [ main ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -12,16 +13,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build ISO inside Arch Linux Container
+      - name: Build ISO inside Arch Linux container
         run: |
           docker run --privileged --rm -v "$PWD":/workspace -w /workspace archlinux:latest bash -c "
-            pacman -Syu --noconfirm archiso git
-            chmod +x airootfs/usr/local/bin/matrix-recon
+            set -e
+            pacman -Syu --noconfirm archiso
             mkdir -p dist
             mkarchiso -v -w /tmp/archiso-work -o dist .
           "
 
-      - name: Upload Bootable ISO
+      - name: Upload bootable ISO
         uses: actions/upload-artifact@v4
         with:
           name: matrix-os-x86_64

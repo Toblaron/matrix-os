@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""Matrix OS desktop HUD.
+
+Draws the animated digital-rain wallpaper on the layer-shell BACKGROUND layer
+and the glowing system gauges (top-right status block, bottom telemetry panel)
+on the BOTTOM layer, so normal windows always sit above them.
+
+Env:
+  MATRIX_RAIN_FPS   frames per second of the rain (default 20, 0 disables)
+  MATRIX_HUD_NOWIDGETS=1   only draw the rain
+"""
+import math
+import os
+import random
+import socket
+import time
+from collections import deque
+
+import cairo
+import gi
+import psutil
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+from gi.repository import Gdk, GLib, Gtk, GtkLayerShell  # noqa: E402
+
+FONT = "FiraCode Nerd Font Mono"
+GREEN = (0.24, 1.0, 0.45)
+DIM = (0.10, 0.55, 0.25)
+PANEL_BG = (0.0, 0.07, 0.03, 0.62)
+# cairo's toy text API has no font fallback, so stick to glyphs FiraCode has
+GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdeghknpqxz@#$%&*+=<>:;|\\/?"
+HISTORY = 60
+
+
+# --------------------------------------------------------------------------- stats
+class Stats:
+    """Samples system telemetry once a second and keeps short histories."""
+
+    def __init__(self):
+        self.cpu = 0.0
+        self.cores = []
+        self.mem = psutil.virtual_memory()
+        self.swap = psutil.swap_memory()
+        self.disk = psutil.disk_usage("/")
+        self.temp = None
+        self.online = False
+        self.rx_rate = self.tx_rate = 0.0
+        self.rx_hist = deque([0.0] * HISTORY, maxlen=HISTORY)
+        self.cpu_hist = deque([0.0] * HISTORY, maxlen=HISTORY)
+        self.io_hist = deque([0.0] * 24, maxlen=24)
+        self._net = psutil.net_io_counters()
+        self._io = psutil.disk_io_counters()
+        self._t = time.monotonic()
+        psutil.cpu_percent(percpu=True)
+        self.update()
+
+    def update(self):
+        now = time.monotonic()
+        dt = max(now - self._t, 1e-3)
+        self._t = now
+        self.cores = psutil.cpu_percent(percpu=True) or [0.0]
+        self.cpu = sum(self.cores) / len(self.cores)
+        self.cpu_hist.append(self.cpu)
+        self.mem = psutil.virtual_memory()
+        self.swap = psutil.swap_memory()
+        self.disk = psutil.disk_usage("/")
+
+        net = psutil.net_io_counters()
+        self.rx_rate = (net.bytes_recv - self._net.bytes_recv) / dt
+        self.tx_rate = (net.bytes_sent - self._net.bytes_sent) / dt
+        self.rx_total, self.tx_total = net.bytes_recv, net.bytes_sent
+        self._net = net
+        self.rx_hist.append(self.rx_rate + self.tx_rate)
+
+        io = psutil.disk_io_counters()
+        if io and self._io:
+            self.io_hist.append(
+                (io.read_bytes + io.write_bytes - self._io.read_bytes - self._io.write_bytes) / dt
+            )
+        self._io = io
+
+        self.temp = None
+        try:
+            temps = psutil.sensors_temperatures()
+            for key in ("k10temp", "coretemp", "zenpower", "cpu_thermal", "acpitz"):
+                if temps.get(key):
+                    self.temp = temps[key][0].current
+                    break
+        except (AttributeError, OSError):
+            pass
+
+        self.online = has_default_route()
+        return True
+
+
+def has_default_route():
+    try:
+        with open("/proc/net/route") as f:
+            next(f)
+            return any(line.split()[1] == "00000000" for line in f)
+    except (OSError, IndexError, StopIteration):
+        return False
+
+
+def human(n, suffix="B/s"):
+    for unit in ("", "K", "M", "G", "T"):
+        if abs(n) < 1024:
+            return f"{n:5.1f}{unit}{suffix}"
+        n /= 1024
+    return f"{n:.1f}P{suffix}"
+
+
+# --------------------------------------------------------------------------- drawing helpers
+def rgba(c, a=1.0):
+    return (*c[:3], a)
+
+
+def glow_stroke(cr, color=GREEN, width=1.5, alpha=1.0):
+    """Stroke the current path with a soft bloom underneath."""
+    path = cr.copy_path()
+    for w, a in ((width * 6, 0.06), (width * 3, 0.12)):
+        cr.new_path()
+        cr.append_path(path)
+        cr.set_source_rgba(*rgba(color, a * alpha))
+        cr.set_line_width(w)
+        cr.stroke()
+    cr.new_path()
+    cr.append_path(path)
+    cr.set_source_rgba(*rgba(color, alpha))
+    cr.set_line_width(width)
+    cr.stroke()
+
+
+def rounded_rect(cr, x, y, w, h, r=8):
+    cr.new_sub_path()
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 1.5 * math.pi)
+    cr.close_path()
+
+
+def panel(cr, x, y, w, h, r=8):
+    rounded_rect(cr, x, y, w, h, r)
+    cr.set_source_rgba(*PANEL_BG)
+    cr.fill_preserve()
+    glow_stroke(cr, width=1.2, alpha=0.85)
+
+
+def text(cr, s, x, y, size=11, color=GREEN, alpha=1.0, align="left"):
+    cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    cr.set_font_size(size)
+    if align != "left":
+        w = cr.text_extents(s).x_advance
+        x -= w if align == "right" else w / 2
+    cr.set_source_rgba(*rgba(color, alpha * 0.25))
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        cr.move_to(x + dx, y + dy)
+        cr.show_text(s)
+    cr.set_source_rgba(*rgba(color, alpha))
+    cr.move_to(x, y)
+    cr.show_text(s)
+
+
+def ring(cr, cx, cy, r, frac, width=6, segments=0, phase=0.0):
+    """Background track + glowing value arc, optionally broken into segments."""
+    cr.new_path()
+    cr.set_line_width(width)
+    cr.set_source_rgba(*rgba(DIM, 0.35))
+    cr.arc(cx, cy, r, 0, 2 * math.pi)
+    cr.stroke()
+    start = -math.pi / 2 + phase
+    end = start + 2 * math.pi * max(0.0, min(frac, 1.0))
+    if segments:
+        step = 2 * math.pi / segments
+        gap = step * 0.25
+        a = start
+        while a < end - 1e-3:
+            cr.new_path()
+            cr.arc(cx, cy, r, a, min(a + step - gap, end))
+            glow_stroke(cr, width=width)
+            a += step
+    elif end > start:
+        cr.new_path()
+        cr.arc(cx, cy, r, start, end)
+        glow_stroke(cr, width=width)
+
+
+def grid(cr, x, y, w, h, cols=6, rows=4):
+    cr.set_line_width(0.6)
+    cr.set_source_rgba(*rgba(GREEN, 0.18))
+    for i in range(1, cols):
+        cr.move_to(x + w * i / cols, y)
+        cr.line_to(x + w * i / cols, y + h)
+    for j in range(1, rows):
+        cr.move_to(x, y + h * j / rows)
+        cr.line_to(x + w, y + h * j / rows)
+    cr.stroke()
+    cr.rectangle(x, y, w, h)
+    glow_stroke(cr, width=1.0, alpha=0.8)
+
+
+def sparkline(cr, x, y, w, h, values, fill=True):
+    vals = list(values)
+    peak = max(max(vals), 1e-9)
+    n = len(vals)
+    cr.new_path()
+    for i, v in enumerate(vals):
+        px = x + w * i / max(n - 1, 1)
+        py = y + h - h * (v / peak) * 0.95
+        (cr.move_to if i == 0 else cr.line_to)(px, py)
+    path = cr.copy_path()
+    if fill:
+        cr.line_to(x + w, y + h)
+        cr.line_to(x, y + h)
+        cr.close_path()
+        cr.set_source_rgba(*rgba(GREEN, 0.10))
+        cr.fill()
+        cr.append_path(path)
+    glow_stroke(cr, width=1.1)
+
+
+def bars(cr, x, y, w, h, values, peak=None, gap=0.35):
+    vals = list(values)
+    peak = peak or max(max(vals), 1e-9)
+    bw = w / max(len(vals), 1)
+    for i, v in enumerate(vals):
+        bh = h * min(v / peak, 1.0)
+        cr.rectangle(x + i * bw + bw * gap / 2, y + h - bh, bw * (1 - gap), bh)
+    cr.set_source_rgba(*rgba(GREEN, 0.85))
+    cr.fill()
+
+
+# --------------------------------------------------------------------------- layer windows
+def layer_window(monitor, layer, anchors, size=None, margins=None, click_through=True):
+    win = Gtk.Window()
+    GtkLayerShell.init_for_window(win)
+    GtkLayerShell.set_layer(win, layer)
+    GtkLayerShell.set_monitor(win, monitor)
+    GtkLayerShell.set_namespace(win, "matrix-hud")
+    GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.NONE)
+    GtkLayerShell.set_exclusive_zone(win, -1)
+    for edge in anchors:
+        GtkLayerShell.set_anchor(win, edge, True)
+    for edge, px in (margins or {}).items():
+        GtkLayerShell.set_margin(win, edge, px)
+    if size:
+        win.set_size_request(*size)
+    visual = win.get_screen().get_rgba_visual()
+    if visual:
+        win.set_visual(visual)
+    win.set_app_paintable(True)
+    if click_through:
+        win.connect("realize", lambda w: w.input_shape_combine_region(cairo.Region()))
+    return win
+
+
+class Rain:
+    """Digital rain. Columns drop mirrored glyphs; a fade pass leaves the trails."""
+
+    CELL = 16
+
+    def __init__(self, monitor, fps):
+        E = GtkLayerShell.Edge
+        self.win = layer_window(
+            monitor, GtkLayerShell.Layer.BACKGROUND, (E.TOP, E.BOTTOM, E.LEFT, E.RIGHT)
+        )
+        self.surface = None
+        self.cols = []
+        self.win.connect("draw", self.on_draw)
+        self.win.connect("size-allocate", self.on_resize)
+        self.win.show_all()
+        if fps > 0:
+            GLib.timeout_add(int(1000 / fps), self.tick)
+
+    def on_resize(self, _w, alloc):
+        if self.surface and (self.surface.get_width(), self.surface.get_height()) == (
+            alloc.width,
+            alloc.height,
+        ):
+            return
+        self.surface = cairo.ImageSurface(cairo.FORMAT_RGB24, alloc.width, alloc.height)
+        cr = cairo.Context(self.surface)
+        cr.set_source_rgb(0, 0.012, 0.004)
+        cr.paint()
+        self.rows = alloc.height // self.CELL + 1
+        self.cols = [self.new_column(random.randint(-self.rows, self.rows)) for _ in range(alloc.width // self.CELL + 1)]
+
+    def new_column(self, y=None):
+        depth = random.random()
+        return {
+            "y": -random.randint(0, self.rows) if y is None else y,
+            "every": random.choice((1, 1, 2, 2, 3)),  # frames per cell step
+            "bright": 0.35 + 0.65 * depth,
+            "size": int(self.CELL * (0.75 + 0.3 * depth)),
+            "prev": None,
+            "t": 0,
+        }
+
+    def glyph(self, cr, ch, x, y, size, color):
+        cr.save()
+        cr.set_font_size(size)
+        cr.translate(x + self.CELL, y)
+        cr.scale(-1, 1)  # mirrored, like the film
+        cr.set_source_rgb(*color)
+        cr.move_to(0, 0)
+        cr.show_text(ch)
+        cr.restore()
+
+    def tick(self):
+        if not self.surface:
+            return True
+        cr = cairo.Context(self.surface)
+        cr.set_source_rgba(0, 0.012, 0.004, 0.055)
+        cr.paint()
+        cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        for i, col in enumerate(self.cols):
+            col["t"] += 1
+            if col["t"] % col["every"]:
+                continue
+            x = i * self.CELL
+            b = col["bright"]
+            if col["prev"] is not None:
+                py, pch = col["prev"]
+                cr.rectangle(x, py - self.CELL + 3, self.CELL, self.CELL)
+                cr.set_source_rgb(0, 0.012, 0.004)
+                cr.fill()
+                self.glyph(cr, pch, x, py, col["size"], (0.05 * b, 0.85 * b, 0.3 * b))
+            col["y"] += 1
+            y = col["y"] * self.CELL
+            if col["y"] > 0:
+                ch = random.choice(GLYPHS)
+                self.glyph(cr, ch, x, y, col["size"], (0.75 * b, 1.0 * b, 0.8 * b))
+                col["prev"] = (y, ch)
+            if col["y"] > self.rows + random.randint(0, 20):
+                self.cols[i] = self.new_column()
+        # random flicker in already-fallen trails
+        for _ in range(len(self.cols) // 12):
+            x = random.randrange(len(self.cols)) * self.CELL
+            y = random.randrange(1, self.rows) * self.CELL
+            self.glyph(cr, random.choice(GLYPHS), x, y, self.CELL - 3, (0.02, 0.22, 0.08))
+        self.win.queue_draw()
+        return True
+
+    def on_draw(self, _w, cr):
+        if self.surface:
+            cr.set_source_surface(self.surface, 0, 0)
+            cr.paint()
+        return True
+
+
+class Widget:
+    def __init__(self, monitor, stats, anchors, size, margins):
+        self.stats = stats
+        self.w, self.h = size
+        self.win = layer_window(monitor, GtkLayerShell.Layer.BOTTOM, anchors, size, margins)
+        self.win.connect("draw", self._draw)
+        self.win.show_all()
+        GLib.timeout_add(1000, self._refresh)
+
+    def _refresh(self):
+        self.win.queue_draw()
+        return True
+
+    def _draw(self, _w, cr):
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        self.draw(cr)
+        return True
+
+
+class StatusBlock(Widget):
+    """Top-right: CPU ring + per-core bar grid, SYS_STATUS / CONNECTION tags."""
+
+    def __init__(self, monitor, stats):
+        E = GtkLayerShell.Edge
+        super().__init__(monitor, stats, (E.TOP, E.RIGHT), (300, 210), {E.TOP: 50, E.RIGHT: 36})
+
+    def draw(self, cr):
+        s = self.stats
+        spin = (time.time() % 8) / 8 * 2 * math.pi
+        ring(cr, 70, 70, 52, s.cpu / 100, width=7)
+        ring(cr, 70, 70, 38, s.mem.percent / 100, width=3, segments=24, phase=spin)
+        text(cr, f"{s.cpu:3.0f}%", 70, 75, 14, align="center")
+        cr.rectangle(18, 136, 104, 4)
+        cr.set_source_rgba(*rgba(DIM, 0.4))
+        cr.fill()
+        cr.rectangle(18, 136, 104 * s.mem.percent / 100, 4)
+        glow_stroke(cr, width=1)
+        cr.rectangle(18, 136, 104 * s.mem.percent / 100, 4)
+        cr.set_source_rgba(*GREEN)
+        cr.fill()
+
+        grid(cr, 160, 10, 130, 130)
+        bars(cr, 168, 18, 114, 114, s.cores[:16], peak=100)
+
+        for x, (k, v) in ((14, ("SYS_STATUS:", "ACTIVE")),
+                          (156, ("CONNECTION:", "SECURED" if s.online else "OFFLINE"))):
+            panel(cr, x, 152, 128, 48, 4)
+            alpha = 1.0 if (v != "OFFLINE" or int(time.time()) % 2) else 0.35
+            text(cr, k, x + 8, 171, 12)
+            text(cr, v, x + 8, 189, 12, alpha=alpha)
+
+
+class TelemetryPanel(Widget):
+    """Bottom-centre: network block, memory/disk rings, temp gauge, IO scope."""
+
+    def __init__(self, monitor, stats):
+        E = GtkLayerShell.Edge
+        super().__init__(monitor, stats, (E.BOTTOM,), (780, 190), {E.BOTTOM: 10})
+        self.host = socket.gethostname().upper()
+
+    def draw(self, cr):
+        s = self.stats
+        up = int(time.time() - psutil.boot_time())
+        text(cr, f"HOST: {self.host}", 6, 16, 14)
+        text(cr, f"UPTIME: {up // 3600:02d}:{up % 3600 // 60:02d}:{up % 60:02d}", 774, 16, 14, align="right")
+
+        panel(cr, 2, 28, 776, 160, 8)
+        # network
+        text(cr, "NET DOWN:", 18, 52, 11)
+        text(cr, "NET UP:", 18, 68, 11)
+        text(cr, "NET TOTAL:", 18, 84, 11)
+        text(cr, human(s.rx_rate), 298, 52, 11, align="right")
+        text(cr, human(s.tx_rate), 298, 68, 11, align="right")
+        text(cr, human(s.rx_total + s.tx_total, "B"), 298, 84, 11, align="right")
+        cr.move_to(18, 152.5)
+        cr.line_to(298, 152.5)
+        cr.set_source_rgba(*rgba(GREEN, 0.4))
+        cr.set_line_width(1)
+        cr.stroke()
+        sparkline(cr, 18, 96, 280, 56, s.rx_hist)
+        text(cr, "SYS_STATUS: ACTIVE", 18, 174, 10)
+        text(cr, "CONNECTION: " + ("SECURED" if s.online else "OFFLINE"), 298, 174, 10, align="right")
+
+        # memory (outer) + disk (inner) rings
+        spin = (time.time() % 12) / 12 * 2 * math.pi
+        ring(cr, 385, 108, 62, s.mem.percent / 100, width=6)
+        ring(cr, 385, 108, 48, s.disk.percent / 100, width=4, segments=16, phase=-spin)
+        ring(cr, 385, 108, 36, s.swap.percent / 100, width=2)
+        text(cr, "MEM", 385, 104, 10, align="center")
+        text(cr, f"{s.mem.percent:.0f}%", 385, 118, 12, align="center")
+
+        # temperature gauge + cpu history
+        temp = s.temp if s.temp is not None else 0
+        ring(cr, 500, 80, 30, temp / 100, width=5)
+        text(cr, f"{temp:.0f}°" if s.temp is not None else "--", 500, 85, 12, align="center")
+        text(cr, "CPU/TEMP", 500, 128, 9, align="center")
+        cr.rectangle(462, 136, 76, 36)
+        glow_stroke(cr, width=0.8, alpha=0.6)
+        sparkline(cr, 464, 138, 72, 32, s.cpu_hist, fill=False)
+
+        # IO oscilloscope
+        grid(cr, 570, 42, 194, 132, cols=4, rows=4)
+        bars(cr, 576, 48, 182, 120, s.io_hist, gap=0.5)
+        text(cr, "DISK I/O", 760, 58, 9, align="right", alpha=0.7)
+
+
+def main():
+    fps = float(os.environ.get("MATRIX_RAIN_FPS", "20"))
+    widgets = os.environ.get("MATRIX_HUD_NOWIDGETS") != "1"
+    stats = Stats()
+    GLib.timeout_add(1000, stats.update)
+    display = Gdk.Display.get_default()
+    keep = []
+    for i in range(display.get_n_monitors()):
+        mon = display.get_monitor(i)
+        keep.append(Rain(mon, fps))
+        if widgets and i == 0:
+            keep += [StatusBlock(mon, stats), TelemetryPanel(mon, stats)]
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

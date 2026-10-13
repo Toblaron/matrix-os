@@ -1,0 +1,83 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+  "margin-top": 6,
+  "margin-left": 10,
+  "margin-right": 10,
+  "spacing": 0,
+
+  "modules-left": ["group/launch"],
+  "modules-center": ["clock"],
+  "modules-right": ["custom/cpu", "custom/ram", "group/tray"],
+
+  "group/launch": {
+    "orientation": "horizontal",
+    "modules": [
+      "custom/menu",
+      "custom/recon",
+      "custom/term",
+      "custom/rain",
+      "custom/viz",
+      "custom/settings",
+      "custom/files"
+    ]
+  },
+  "custom/menu":     { "format": "󰘳", "tooltip-format": "Applications", "on-click": "fuzzel" },
+  "custom/recon":    { "format": "󰒃", "tooltip-format": "Passive recon (Super+O)", "on-click": "kitty --class matrix_osint -e matrix-recon" },
+  "custom/term":     { "format": "", "tooltip-format": "Terminal", "on-click": "kitty" },
+  "custom/rain":     { "format": "", "tooltip-format": "Digital rain", "on-click": "kitty --class matrix_rain -e cmatrix -b -u 4 -C green" },
+  "custom/viz":      { "format": "󰺢", "tooltip-format": "Audio visualizer", "on-click": "kitty --class matrix_viz -e cava" },
+  "custom/settings": { "format": "", "tooltip-format": "Edit Wayfire config", "on-click": "kitty -e nano ~/.config/wayfire.ini" },
+  "custom/files":    { "format": "󰆓", "tooltip-format": "Restore desktop layout", "on-click": "matrix-layout" },
+
+  "clock": {
+    "interval": 1,
+    "format": "  │  {:%a %d  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "calendar": { "format": { "today": "<span color='#b6ffcf'><b>{}</b></span>" } }
+  },
+
+  "custom/cpu": {
+    "exec": "matrix-sparks cpu",
+    "return-type": "json",
+    "restart-interval": 5
+  },
+  "custom/ram": {
+    "exec": "matrix-sparks ram",
+    "return-type": "json",
+    "restart-interval": 5
+  },
+
+  "group/tray": {
+    "orientation": "horizontal",
+    "modules": ["battery", "network", "bluetooth", "pulseaudio", "custom/power"]
+  },
+  "battery": {
+    "format": "{icon} {capacity}%",
+    "format-charging": "󰂄 {capacity}%",
+    "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
+    "states": { "warning": 25, "critical": 10 }
+  },
+  "network": {
+    "format-wifi": "󰖩",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰖪",
+    "tooltip-format": "{ifname} {ipaddr}\n↓ {bandwidthDownBytes}  ↑ {bandwidthUpBytes}",
+    "on-click": "kitty --class matrix_float -e nmtui"
+  },
+  "bluetooth": {
+    "format": "",
+    "format-disabled": "󰂲",
+    "format-connected": "󰂱",
+    "tooltip-format": "{controller_alias} {status}"
+  },
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "󰝟",
+    "format-icons": { "default": ["", "", ""] },
+    "tooltip-format": "{volume}%",
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+  },
+  "custom/power": { "format": "⏻", "tooltip-format": "Power", "on-click": "matrix-power" }
+}

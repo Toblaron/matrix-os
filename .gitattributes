@@ -1,0 +1,4 @@
+# Everything ends up on Linux: keep LF even on Windows checkouts.
+* text=auto eol=lf
+*.jpg binary
+*.png binary

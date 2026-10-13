@@ -1,0 +1,68 @@
+* {
+  font-family: "FiraCode Nerd Font", monospace;
+  font-size: 13px;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background: transparent;
+  color: #3dff74;
+}
+
+tooltip {
+  background: rgba(0, 16, 6, 0.92);
+  border: 1px solid #2bd65f;
+  border-radius: 6px;
+}
+tooltip label { color: #8dffb0; }
+
+/* each group is a glowing pill */
+#launch,
+#clock,
+#custom-cpu,
+#custom-ram,
+#tray {
+  background: rgba(0, 20, 8, 0.70);
+  border: 1px solid rgba(61, 255, 116, 0.65);
+  border-radius: 8px;
+  box-shadow: 0 0 6px rgba(61, 255, 116, 0.35), inset 0 0 6px rgba(61, 255, 116, 0.15);
+  padding: 0 4px;
+  margin: 0 4px;
+}
+
+#launch > widget > *,
+#tray > widget > * {
+  padding: 0 9px;
+  color: #3dff74;
+}
+
+#launch > widget > *:hover,
+#tray > widget > *:hover {
+  background: rgba(61, 255, 116, 0.18);
+  border-radius: 5px;
+  color: #c8ffd8;
+}
+
+#custom-menu {
+  background: rgba(61, 255, 116, 0.12);
+  border-radius: 5px;
+}
+
+#clock {
+  padding: 0 16px;
+  letter-spacing: 1px;
+}
+
+#custom-cpu,
+#custom-ram {
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+#battery.warning { color: #d7ff3d; }
+#battery.critical { color: #ff5f3d; }
+#network.disconnected,
+#bluetooth.disabled,
+#pulseaudio.muted { color: rgba(61, 255, 116, 0.35); }

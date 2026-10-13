@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Power menu for the waybar power button.
+choice=$(printf '󰍃  Exit Wayfire\n󰜉  Reboot\n⏻  Shutdown\n' | fuzzel --dmenu --prompt '⏻ ' --lines 3)
+case "$choice" in
+  *Exit*)     pkill -x wayfire ;;
+  *Reboot*)   systemctl reboot ;;
+  *Shutdown*) systemctl poweroff ;;
+esac

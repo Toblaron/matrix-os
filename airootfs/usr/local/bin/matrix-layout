@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Opens the Matrix OS desktop layout: digital-rain window, fastfetch,
+# audio visualizer and a shell, placed like the reference design.
+#
+# Window positions are window-rules in ~/.config/wayfire.ini; this script
+# rescales them to the current output resolution first (Wayfire reloads the
+# ini live), so the layout fits any screen.
+#   --reset   close the layout windows and open them again
+set -u
+INI="$HOME/.config/wayfire.ini"
+
+read -r W H < <(
+  wlr-randr 2>/dev/null | awk '
+    /current/ && !w { split($1, r, "x"); w = r[1]; h = r[2] }
+    /Scale:/ && !s  { s = $2 }
+    END { if (!s) s = 1; if (w) printf "%d %d\n", w / s, h / s }'
+)
+W=${W:-1920} H=${H:-1080}
+
+# name  x     y     w     h   (fractions of the output, taken from Desktop1.jpg)
+LAYOUT="rain  0.025 0.067 0.410 0.497
+fetch 0.325 0.294 0.405 0.432
+viz   0.748 0.296 0.233 0.200
+term  0.748 0.513 0.233 0.346"
+
+if [ -f "$INI" ]; then
+  rules=$(echo "$LAYOUT" | awk -v W="$W" -v H="$H" '{
+    printf "rule_%s_move = on created if app_id is \"matrix_%s\" then move %d %d\n", $1, $1, $2*W, $3*H
+    printf "rule_%s_size = on created if app_id is \"matrix_%s\" then resize %d %d\n", $1, $1, $4*W, $5*H }')
+  awk -v rules="$rules" '
+    /^# >>> matrix-layout/ { print; print rules; skip = 1; next }
+    /^# <<< matrix-layout/ { skip = 0 }
+    !skip' "$INI" > "$INI.tmp" && mv "$INI.tmp" "$INI"
+  sleep 0.5 # let Wayfire pick up the new rules
+fi
+
+if [ "${1:-}" = "--reset" ]; then
+  pkill -f -- '--class matrix_(rain|fetch|viz|term)'
+  sleep 0.3
+fi
+
+launch() { # class, command...
+  local class=$1; shift
+  pgrep -f -- "--class $class" >/dev/null || setsid -f kitty --class "$class" "$@" >/dev/null 2>&1
+}
+
+launch matrix_rain  cmatrix -b -u 4 -C green
+launch matrix_fetch bash -c 'echo "❯ fastfetch"; fastfetch; exec bash'
+launch matrix_viz   cava
+launch matrix_term  bash -c 'printf "❯ sudo boot-overrides\n\nTHE MATRIX HAS YOU.\n\n"; exec bash'

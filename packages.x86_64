@@ -1,23 +1,56 @@
+# --- base / live boot
 base
 linux
 linux-firmware
+sof-firmware
+amd-ucode
+intel-ucode
+mkinitcpio
+mkinitcpio-archiso
+syslinux
+sudo
+nano
+less
+
+# --- hardware / services
 networkmanager
-seatd
+bluez
+bluez-utils
 pipewire
+pipewire-pulse
 wireplumber
+polkit
+mesa
+
+# --- desktop
 wayfire
-wf-shell
+xorg-xwayland
 waybar
+fuzzel
 kitty
+wlr-randr
+
+# --- matrix-hud
+gtk3
+gtk-layer-shell
+python-gobject
+python-cairo
+python-psutil
+
+# --- eye candy
 cmatrix
+cava
 fastfetch
-ttf-nerd-fonts-symbols
-ttf-fira-code
+ttf-firacode-nerd
+ttf-nerd-fonts-symbols-mono
+noto-fonts-emoji
+
+# --- recon toolkit
 curl
 jq
 fzf
 whois
 bind
-exiftool
+perl-image-exiftool
 python-pipx
 git
