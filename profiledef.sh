@@ -16,6 +16,7 @@ airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M'
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
   ["/root"]="0:0:750"
+  ["/etc/sudoers.d/10-matrix-live"]="0:0:440"
   ["/usr/local/bin/matrix-recon"]="0:0:755"
   ["/usr/local/bin/matrix-hud"]="0:0:755"
   ["/usr/local/bin/matrix-sparks"]="0:0:755"

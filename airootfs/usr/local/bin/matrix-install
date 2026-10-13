@@ -82,6 +82,8 @@ EOF
 
 arch-chroot /mnt /bin/bash -e <<EOF
 pacman-key --init >/dev/null && pacman-key --populate >/dev/null
+userdel -r neo 2>/dev/null || true
+rm -f /etc/sudoers.d/10-matrix-live /etc/sysusers.d/matrix-live.conf
 passwd -l root >/dev/null
 useradd -m -G wheel -s /bin/bash "$user"
 echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/10-wheel

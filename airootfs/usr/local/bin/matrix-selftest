@@ -17,7 +17,7 @@ done
 
 if [ -n "$missing" ]; then
   say "FAIL: not running:$missing"
-  tail -n 60 /root/.local/state/matrix/wayfire.log > "$out" 2>/dev/null
+  tail -n 60 /home/neo/.local/state/matrix/wayfire.log > "$out" 2>/dev/null
   journalctl -b -p warning -n 60 --no-pager > "$out"
 else
   sleep 30 # let the rain fill the screen and the layout windows open

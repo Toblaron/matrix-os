@@ -207,7 +207,10 @@ def outbound_connections(limit=7):
 
 def firewall_drops():
     try:
-        out = subprocess.run(["nft", "-j", "list", "counter", "inet", "matrix", "dropped"],
+        cmd = ["nft", "-j", "list", "counter", "inet", "matrix", "dropped"]
+        if os.geteuid() != 0:
+            cmd = ["sudo", "-n"] + cmd  # NOPASSWD on the live system; skipped silently elsewhere
+        out = subprocess.run(cmd,
                              capture_output=True, text=True, timeout=2)
         for item in json.loads(out.stdout).get("nftables", []):
             if "counter" in item:

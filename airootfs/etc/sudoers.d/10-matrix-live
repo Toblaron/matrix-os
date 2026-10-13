@@ -1,0 +1,2 @@
+# Live session only; matrix-install removes this on installed systems.
+neo ALL=(ALL:ALL) NOPASSWD: ALL
