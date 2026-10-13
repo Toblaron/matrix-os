@@ -1,0 +1,38 @@
+# Matrix OS
+[manager]
+cwd = { fg = "#3dff74", bold = true }
+hovered = { fg = "#020a05", bg = "#3dff74" }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#d9ffe6", bold = true }
+find_position = { fg = "#8dffb0" }
+marker_selected = { fg = "#3dff74", bg = "#3dff74" }
+marker_copied = { fg = "#4fe0a5", bg = "#4fe0a5" }
+marker_cut = { fg = "#ff3d3d", bg = "#ff3d3d" }
+tab_active = { fg = "#020a05", bg = "#3dff74" }
+tab_inactive = { fg = "#3dff74", bg = "#07140b" }
+border_style = { fg = "#1f8f45" }
+
+[status]
+separator_style = { fg = "#07140b", bg = "#07140b" }
+mode_normal = { fg = "#020a05", bg = "#3dff74", bold = true }
+mode_select = { fg = "#020a05", bg = "#8fdc5a", bold = true }
+mode_unset = { fg = "#020a05", bg = "#ff3d3d", bold = true }
+progress_label = { fg = "#d9ffe6", bold = true }
+progress_normal = { fg = "#3dff74", bg = "#07140b" }
+progress_error = { fg = "#ff3d3d", bg = "#07140b" }
+permissions_t = { fg = "#3dff74" }
+permissions_r = { fg = "#8fdc5a" }
+permissions_w = { fg = "#d7ff3d" }
+permissions_x = { fg = "#74ffc4" }
+permissions_s = { fg = "#2f6b45" }
+
+[filetype]
+rules = [
+  { mime = "image/*", fg = "#74ffc4" },
+  { mime = "video/*", fg = "#8fdc5a" },
+  { mime = "audio/*", fg = "#8fdc5a" },
+  { mime = "application/*zip", fg = "#d7ff3d" },
+  { name = "*", is = "exec", fg = "#d9ffe6" },
+  { name = "*/", fg = "#3dff74", bold = true },
+  { name = "*", fg = "#8dffb0" },
+]

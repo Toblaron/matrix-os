@@ -1,0 +1,14 @@
+/* Matrix OS: green accents on adw-gtk3-dark (Thunar, pavucontrol, blueman, gparted...) */
+@define-color accent_color #3dff74;
+@define-color accent_bg_color #1f8f45;
+@define-color accent_fg_color #020a05;
+@define-color window_bg_color #050d08;
+@define-color window_fg_color #8dffb0;
+@define-color view_bg_color #020a05;
+@define-color view_fg_color #8dffb0;
+@define-color headerbar_bg_color #07140b;
+@define-color headerbar_fg_color #3dff74;
+@define-color card_bg_color #07140b;
+@define-color popover_bg_color #07140b;
+@define-color dialog_bg_color #07140b;
+@define-color sidebar_bg_color #040b06;

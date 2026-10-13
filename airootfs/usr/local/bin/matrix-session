@@ -8,6 +8,8 @@ CONF=$HOME/.config
 mkdir -p "$STATE" "$HOME/.cache/matrix"
 
 eval "$(matrix-hwdetect)"
+# Qt apps (Wireshark, KeePassXC) follow the GTK theme
+export QT_QPA_PLATFORMTHEME=gtk3
 
 # swap in the glowing pixdecor decorations once the plugin is available
 if [ -e /usr/lib/wayfire/libpixdecor.so ] && grep -q '^plugins = .*\bdecoration\b' "$CONF/wayfire.ini"; then

@@ -60,6 +60,53 @@ ttf-firacode-nerd
 ttf-nerd-fonts-symbols-mono
 noto-fonts-emoji
 
+# --- apps
+firefox
+thunar
+thunar-archive-plugin
+tumbler
+ffmpegthumbnailer
+yazi
+neovim
+micro
+mpv
+imv
+zathura
+zathura-pdf-mupdf
+unzip
+7zip
+unrar
+pavucontrol
+blueman
+gparted
+polkit-gnome
+keepassxc
+
+# --- terminal toolkit
+btop
+htop
+tmux
+lazygit
+ripgrep
+fd
+bat
+eza
+zoxide
+openssh
+rsync
+wget
+
+# --- network / analysis
+wireshark-qt
+nmap
+mtr
+iperf3
+tcpdump
+
+# --- look
+adw-gtk-theme
+papirus-icon-theme
+
 # --- privacy / security
 nftables
 tor

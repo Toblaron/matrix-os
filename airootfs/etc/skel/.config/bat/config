@@ -1,0 +1,3 @@
+# use the terminal's all-green palette
+--theme="ansi"
+--style="numbers,changes,header"

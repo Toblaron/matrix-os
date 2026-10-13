@@ -1,0 +1,23 @@
+# Matrix OS
+set font "FiraCode Nerd Font 11"
+set default-bg "#020a05"
+set default-fg "#3dff74"
+set statusbar-bg "#07140b"
+set statusbar-fg "#3dff74"
+set inputbar-bg "#020a05"
+set inputbar-fg "#8dffb0"
+set notification-bg "#07140b"
+set notification-fg "#3dff74"
+set notification-error-bg "#1a0000"
+set notification-error-fg "#ff3d3d"
+set highlight-color "rgba(61,255,116,0.35)"
+set highlight-active-color "rgba(61,255,116,0.6)"
+set completion-bg "#07140b"
+set completion-fg "#8dffb0"
+set completion-highlight-bg "#1f8f45"
+set completion-highlight-fg "#020a05"
+set recolor true
+set recolor-lightcolor "#020a05"
+set recolor-darkcolor "#8dffb0"
+set recolor-keephue false
+set selection-clipboard clipboard

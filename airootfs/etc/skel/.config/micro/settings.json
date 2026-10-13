@@ -1,0 +1,8 @@
+{
+  "colorscheme": "matrix",
+  "mouse": true,
+  "tabsize": 4,
+  "tabstospaces": true,
+  "clipboard": "terminal",
+  "statusformatl": "$(filename) $(modified)($(line),$(col)) $(status.paste)| ft:$(opt:filetype) | $(opt:fileformat) | $(opt:encoding)"
+}
