@@ -57,7 +57,26 @@ PY
   sleep 60
   alive || { say "FAIL: HUD/compositor died later"; say DONE; sleep 3; systemctl poweroff; exit 1; }
   say "READY2"
-  sleep 15
+  dump_hud() {
+    say "--- hud.log ($1)"
+    tail -n 25 /home/neo/.local/state/matrix/hud.log > "$out" 2>/dev/null
+  }
+  dump_hud "with pixdecor, +60s"
+
+  # A/B: same session without pixdecor, fresh HUD
+  ini=/home/neo/.config/wayfire.ini
+  if grep -q '^plugins = .*\bpixdecor\b' "$ini"; then
+    sudo -u neo sed -i '/^plugins = /s/\bpixdecor\b/decoration/' "$ini"
+    sleep 10 # Wayfire reloads the ini and swaps the decorator
+    env_of_bar=$(tr '\0' '\n' < /proc/$(pgrep -x waybar | head -1)/environ | grep -E '^(WAYLAND_DISPLAY|XDG_RUNTIME_DIR|WAYFIRE_SOCKET|MATRIX_[A-Z_]+|WLR_[A-Z_]+|HOME|USER|PATH)=')
+    pkill -f 'python3? .*matrix-hud'; sleep 2
+    echo "=== restart without pixdecor" | sudo -u neo tee -a /home/neo/.local/state/matrix/hud.log >/dev/null
+    sudo -u neo env $env_of_bar setsid matrix-hud >/dev/null 2>&1 &
+    sleep 60
+    say "READY3"
+    dump_hud "without pixdecor, +60s"
+  fi
+  sleep 10
   say "PASS"
 fi
 say "DONE"

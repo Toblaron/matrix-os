@@ -907,6 +907,18 @@ class Hud:
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, self.load_mode)
         self.load_mode()
         self.ipc = WayfireIPC(self.on_ipc)  # after the windows: may wait on the compositor
+        self.beats = 0
+        GLib.timeout_add_seconds(5, self.heartbeat)
+
+    def heartbeat(self):
+        """Proves the main loop is alive and which windows have drawn (hud.log)."""
+        self.beats += 1
+        if self.beats <= 24 or self.beats % 60 == 0:
+            drawn = [type(w).__name__ for w in self.widgets + self.side if getattr(w, "_drawn", False)]
+            drawn += ["Rain"] * sum(1 for r in self.rains if getattr(r, "_drawn", False))
+            ipc = "yes" if self.ipc and self.ipc.connected else "no"
+            log(f"alive: drawn={','.join(drawn) or 'none'} ipc={ipc} cpu={self.stats.cpu:.0f}%")
+        return True
 
     def load_mode(self):
         mode = os.environ.get("MATRIX_HUD_MODE", "full")
