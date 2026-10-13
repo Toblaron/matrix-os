@@ -146,7 +146,7 @@ class Stats:
 
         was_online = self.online
         self.online = has_default_route()
-        self.link = link_state(self.online)
+        self.link = link_state(self.online, fw_loaded=self.fw_drops is not None)
         if was_online and not self.online:
             self.emit("offline")
 
@@ -174,7 +174,7 @@ def has_default_route():
         return False
 
 
-def link_state(online):
+def link_state(online, fw_loaded=False):
     """What the CONNECTION tag claims, backed by what is actually running."""
     if not online:
         return "OFFLINE"
@@ -183,7 +183,7 @@ def link_state(online):
     stats = psutil.net_if_stats()
     if any(n.startswith(("wg", "tun", "proton", "mullvad")) and s.isup for n, s in stats.items()):
         return "VPN"
-    if Path("/run/matrix/firewall-strict").exists():
+    if fw_loaded or Path("/run/matrix/firewall-strict").exists():
         return "SECURED"
     return "EXPOSED"
 

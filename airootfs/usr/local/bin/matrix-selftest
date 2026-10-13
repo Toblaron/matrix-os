@@ -28,6 +28,7 @@ else
   say "profile: $(sudo -u neo matrix-hwdetect | tr '
 ' ' ')"
   say "firewall: nftables=$(systemctl is-active nftables) marker=$([ -e /run/matrix/firewall-strict ] && echo yes || echo no) tables=$(nft list tables 2>&1 | xargs)"
+  journalctl -b -u nftables --no-pager | tail -n 6 > "$out"
   say "--- hud / client errors from wayfire.log"
   grep -aiE 'traceback|error|exception|matrix-hud|kitty|gtk|layer' "$log" | grep -v '^EE.*EGL' | tail -n 40 > "$out"
   alive() { pgrep -f 'python3? .*matrix-hud' >/dev/null && pgrep -x wayfire >/dev/null && pgrep -x waybar >/dev/null; }
