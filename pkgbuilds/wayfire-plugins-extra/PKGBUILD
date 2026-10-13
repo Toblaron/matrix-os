@@ -2,7 +2,7 @@
 # stuck on 0.10). Ships pixdecor (rounded, glowing decorations) and shadows.
 pkgname=wayfire-plugins-extra
 pkgver=0.11.2
-pkgrel=2
+pkgrel=3
 # pixdecor/shadows are git subprojects whose wraps track HEAD; pin them to the
 # commits that match wayfire 0.11 (pixdecor moved to the 0.12 API in Oct 2026)
 _pixdecor=a9465be50560bfb6430923bddc56a4c368341148
@@ -12,7 +12,8 @@ arch=(x86_64)
 url=https://github.com/WayfireWM/wayfire-plugins-extra
 license=(MIT)
 depends=(wayfire glibmm libevdev boost-libs librsvg cairo)
-makedepends=(git meson ninja boost nlohmann-json glm vulkan-headers wayland-protocols)
+makedepends=(git meson ninja cmake boost nlohmann-json glm vulkan-headers wayland-protocols)
+# cmake: meson finds glm through its CMake config (glm ships no .pc file)
 source=("git+$url.git#tag=v$pkgver"
         "pixdecor::git+https://github.com/soreau/pixdecor.git#commit=$_pixdecor"
         "wayfire-shadows::git+https://github.com/timgott/wayfire-shadows.git#commit=$_shadows")
